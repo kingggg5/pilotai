@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, king-dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-and-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - run: node scripts/quality/vibe-check.test.mjs
+      - run: node scripts/quality/vibe-check.mjs --json work/quality-gate-report.json --fail-on high
+      - run: npm --prefix apps/api ci
+      - run: npm --prefix apps/api run typecheck
+      - run: npm --prefix apps/api test
+      - run: npm --prefix apps/api run build
+      - run: npm --prefix apps/api run eval:classifier
+      - run: npm --prefix apps/api run eval:rag
+      - run: npm --prefix apps/api run eval:golden
+      - run: apps/api/node_modules/.bin/tsx --test evals/golden-contract.test.ts
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm --prefix apps/web ci
+      - run: npm --prefix apps/web run lint -- --max-warnings=0
+      - run: npm --prefix apps/web run typecheck
+      - run: npm --prefix apps/web test
+      - run: npm --prefix apps/web run build
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker build apps/api
+      - run: docker run --rm -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:1.29-alpine nginx -t

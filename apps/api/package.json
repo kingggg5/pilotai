@@ -1,0 +1,47 @@
+{
+  "name": "servicepilot-api",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
+    "eval:classifier": "tsx ../../evals/run-classifier.ts --report ../../evals/classifier-report.json",
+    "eval:rag": "tsx ../../evals/run-rag.ts --report ../../evals/rag-report.json",
+    "eval:golden": "tsx ../../evals/run-golden.ts --report ../../evals/golden-report.json",
+    "mcp": "tsx src/mcp.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/helmet": "^13.1.0",
+    "@fastify/swagger": "^9.8.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@langchain/langgraph": "^1.4.9",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.4",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.79.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "fastify": "^5.11.3",
+    "fastify-type-provider-zod": "^7.0.0",
+    "jose": "^6.2.8",
+    "openai": "^7.4.0",
+    "pg": "^8.23.0",
+    "redis": "^5.11.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

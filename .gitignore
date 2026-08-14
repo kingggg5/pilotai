@@ -1,0 +1,47 @@
+.env
+.env.*
+!.env.example
+!.env.production.example
+.secrets/
+.impeccable/critique/
+backups/
+work/
+*.pem
+*.key
+*.p12
+
+# Legacy Python artifacts (the application runtime is TypeScript)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest-cache-files-*/
+.ruff_cache/
+.mypy_cache/
+.venv/
+htmlcov/
+.coverage
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+*.log
+dist/
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Runtime data
+data/
+*.db
+*.sqlite3
+
+# Documentation screenshots are source artifacts and remain tracked.
+!docs/images/*.webp
+!docs/images/*.png

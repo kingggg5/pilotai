@@ -1,0 +1,79 @@
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: !reset null
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2G }
+        reservations: { memory: 512M }
+
+  redis:
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+        reservations: { memory: 128M }
+
+  migrate:
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["export PGPASSWORD=$$(cat /run/secrets/postgres_password); exec psql -v ON_ERROR_STOP=1 -h postgres -U servicepilot -d servicepilot -f /migrations/init.sql"]
+    environment:
+      PGPASSWORD: !reset null
+    secrets: [postgres_password]
+
+  api:
+    environment:
+      APP_ENV: production
+      AI_MODE: openai
+      OPENAI_API_KEY: !reset null
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      EMBEDDING_PROVIDER: openai
+      EMBEDDING_MODEL: text-embedding-3-small
+      AI_FALLBACK_ON_ERROR: "false"
+      PERSISTENCE_MODE: postgres
+      DATABASE_URL: !reset null
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      AUTH_MODE: jwt
+      JWT_SECRET: !reset null
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      WEBHOOK_SECRET: !reset null
+      WEBHOOK_SECRET_FILE: /run/secrets/webhook_secret
+      WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+    secrets: [openai_api_key, database_url, jwt_secret, webhook_secret]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 1G }
+        reservations: { memory: 256M }
+  web:
+    environment:
+      SERVICEPILOT_TENANT_ID: ${SERVICEPILOT_TENANT_ID:?SERVICEPILOT_TENANT_ID is required}
+      SERVICEPILOT_ADMIN_SUBJECT: ${SERVICEPILOT_ADMIN_SUBJECT:-support-admin}
+      SERVICEPILOT_ADMIN_PASSWORD: !reset null
+      SERVICEPILOT_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      SERVICEPILOT_SESSION_SECRET: !reset null
+      SERVICEPILOT_SESSION_SECRET_FILE: /run/secrets/session_secret
+      SERVICEPILOT_JWT_SECRET: !reset null
+      SERVICEPILOT_JWT_SECRET_FILE: /run/secrets/jwt_secret
+    secrets: [admin_password, session_secret, jwt_secret]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+        reservations: { memory: 128M }
+
+  nginx:
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
+        reservations: { memory: 32M }
+
+secrets:
+  openai_api_key: { file: ./.secrets/openai_api_key }
+  database_url: { file: ./.secrets/database_url }
+  postgres_password: { file: ./.secrets/postgres_password }
+  jwt_secret: { file: ./.secrets/jwt_secret }
+  webhook_secret: { file: ./.secrets/webhook_secret }
+  admin_password: { file: ./.secrets/admin_password }
+  session_secret: { file: ./.secrets/session_secret }

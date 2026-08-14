@@ -1,0 +1,167 @@
+name: servicepilot-ai
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: servicepilot
+      POSTGRES_USER: servicepilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-servicepilot}
+    volumes:
+      - servicepilot-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servicepilot -d servicepilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  redis:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    restart: unless-stopped
+    volumes:
+      - servicepilot-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    logging: *logging
+
+  migrate:
+    image: pgvector/pgvector:pg17
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-servicepilot}
+    volumes:
+      - ./infra/postgres/init.sql:/migrations/init.sql:ro
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "-h", "postgres", "-U", "servicepilot", "-d", "servicepilot", "-f", "/migrations/init.sql"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *logging
+
+  api:
+    build: ./apps/api
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      AI_MODE: ${AI_MODE:-local}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}
+      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-low}
+      OPENAI_TIMEOUT_MS: ${OPENAI_TIMEOUT_MS:-20000}
+      OPENAI_MAX_RETRIES: ${OPENAI_MAX_RETRIES:-0}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_FALLBACK_ON_ERROR: ${AI_FALLBACK_ON_ERROR:-false}
+      PERSISTENCE_MODE: postgres
+      DATABASE_URL: postgresql://servicepilot:${POSTGRES_PASSWORD:-servicepilot}@postgres:5432/servicepilot
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      REDIS_URL: redis://redis:6379/0
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
+      AUTH_MODE: ${AUTH_MODE:-local}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ISSUER: ${JWT_ISSUER:-servicepilot}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-servicepilot-api}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    expose: ["8000"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 30s
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8000/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *logging
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_URL: ${WEB_ORIGIN:-http://localhost:8080}
+        DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-local}
+    environment:
+      SERVICEPILOT_API_URL: http://api:8000
+      SERVICEPILOT_TENANT_ID: ${SERVICEPILOT_TENANT_ID:-tenant-local}
+      SERVICEPILOT_ADMIN_PASSWORD: ${SERVICEPILOT_ADMIN_PASSWORD:-change-this-before-sharing}
+      SERVICEPILOT_SESSION_SECRET: ${SERVICEPILOT_SESSION_SECRET:-local-session-secret-change-me}
+      SERVICEPILOT_CUSTOMER_SESSION_SECRET: ${SERVICEPILOT_CUSTOMER_SESSION_SECRET:-local-customer-session-secret-change-me}
+      SERVICEPILOT_ADMIN_SUBJECT: ${SERVICEPILOT_ADMIN_SUBJECT:-support-admin}
+      SERVICEPILOT_JWT_SECRET: ${JWT_SECRET:-}
+      SERVICEPILOT_JWT_ISSUER: ${JWT_ISSUER:-servicepilot}
+      SERVICEPILOT_JWT_AUDIENCE: ${JWT_AUDIENCE:-servicepilot-api}
+      SERVICEPILOT_UPSTREAM_TIMEOUT_MS: ${SERVICEPILOT_UPSTREAM_TIMEOUT_MS:-25000}
+      DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-local}
+    expose: ["3000"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 30s
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *logging
+
+  nginx:
+    image: nginx:1.29-alpine
+    read_only: true
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 10s
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "${NGINX_PORT:-8080}:8080"
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    logging: *logging
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.136.0
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./infra/otel/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    expose: ["4317", "4318"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+volumes:
+  servicepilot-postgres:
+  servicepilot-redis:

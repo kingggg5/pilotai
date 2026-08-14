@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-13T13:00:00+07:00",
+  "title": "Design System: ServicePilot AI",
+  "extensions": {
+    "colorMeta": {
+      "studio-black": { "role": "neutral", "displayName": "Studio Black", "canonical": "#0A0A08", "tonalRamp": ["#0A0A08", "#1B1B18", "#343431", "#52524D", "#73736D", "#9B9B94", "#C8C8C1", "#F6F6F2"] },
+      "acid-lime": { "role": "primary", "displayName": "Acid Proof Lime", "canonical": "#8CFF3E", "tonalRamp": ["#142A08", "#285710", "#3E8618", "#57B720", "#70E82F", "#8CFF3E", "#BCFF91", "#E9FFD9"] },
+      "paper": { "role": "neutral", "displayName": "Proof Paper", "canonical": "#F6F6F2", "tonalRamp": ["#181816", "#353532", "#555550", "#777771", "#9C9C95", "#C2C2BB", "#E1E1DB", "#F6F6F2"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Studio Display", "purpose": "Hero thesis and manifesto only." },
+      "body": { "displayName": "Operational Body", "purpose": "Thai-English task content and evidence." }
+    },
+    "shadows": [
+      { "name": "stage-lift", "value": "0 28px 80px rgba(0,0,0,.24)", "purpose": "White opening stage only." },
+      { "name": "control-lift", "value": "0 8px 24px rgba(0,0,0,.18)", "purpose": "Dialogs and floating controls." }
+    ],
+    "motion": [
+      { "name": "studio-ease", "value": "cubic-bezier(.2,.8,.2,1)", "purpose": "Short state and section transitions." }
+    ],
+    "breakpoints": [
+      { "name": "tablet", "value": "980px" },
+      { "name": "mobile", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Proof Action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary verified action.",
+      "html": "<button class=\"ds-proof-action\">OPEN QUEUE <span>→</span></button>",
+      "css": ".ds-proof-action{min-height:44px;padding:0 22px;border:1px solid #8CFF3E;border-radius:999px;background:#8CFF3E;color:#0A0A08;font:800 12px Aptos,Tahoma,sans-serif}.ds-proof-action:hover{transform:translateY(-2px)}.ds-proof-action:focus-visible{outline:2px solid #8CFF3E;outline-offset:3px}"
+    },
+    {
+      "name": "Selected Filter",
+      "kind": "chip",
+      "description": "Selection and current-state chip.",
+      "html": "<button class=\"ds-filter\" aria-pressed=\"true\">NEEDS APPROVAL</button>",
+      "css": ".ds-filter{min-height:44px;padding:0 16px;border:1px solid #8CFF3E;border-radius:999px;background:#8CFF3E;color:#0A0A08;font:800 11px Aptos,Tahoma,sans-serif}.ds-filter:focus-visible{outline:2px solid #8CFF3E;outline-offset:3px}"
+    },
+    {
+      "name": "Graphite Work Card",
+      "kind": "card",
+      "refersTo": "card-dark",
+      "description": "Primary operational container.",
+      "html": "<article class=\"ds-work-card\"><small>RETRIEVED EVIDENCE</small><h3>Refund policy · Page 12</h3><p>Verified source content appears here.</p></article>",
+      "css": ".ds-work-card{max-width:420px;padding:24px;border:1px solid #3A3A36;border-radius:16px;background:#1D1D1B;color:#F6F6F2;font-family:Aptos,Tahoma,sans-serif}.ds-work-card small{color:#8CFF3E;font-weight:800;letter-spacing:.08em}.ds-work-card h3{margin:16px 0 8px;font-size:22px}.ds-work-card p{color:#D7D7D0;line-height:1.55}"
+    },
+    {
+      "name": "Studio Search",
+      "kind": "input",
+      "description": "Ticket and customer search.",
+      "html": "<label class=\"ds-search\"><span>SEARCH QUEUE</span><input placeholder=\"Ticket or customer\"></label>",
+      "css": ".ds-search{display:grid;gap:8px;color:#A5A5A0;font:800 11px Aptos,Tahoma,sans-serif}.ds-search input{min-height:44px;padding:0 14px;border:1px solid #44443F;border-radius:12px;background:#292927;color:#F6F6F2}.ds-search input:focus{outline:2px solid #8CFF3E;outline-offset:2px}"
+    },
+    {
+      "name": "Studio Navigation",
+      "kind": "nav",
+      "description": "Embedded black pill navigation.",
+      "html": "<nav class=\"ds-nav\"><strong>✳ ServicePilot</strong><a href=\"#\">INTAKE</a><a href=\"#\">EVIDENCE</a><a href=\"#\">APPROVAL</a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:24px;padding:10px 18px;border-radius:999px;background:#0A0A08;color:#F6F6F2;font:800 11px Aptos,Tahoma,sans-serif}.ds-nav strong{margin-right:auto}.ds-nav strong:first-letter{color:#8CFF3E}.ds-nav a{color:#D7D7D0;text-decoration:none}.ds-nav a:hover,.ds-nav a:focus-visible{color:#8CFF3E}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Proof Studio",
+    "overview": "Paper-white stages and graphite work surfaces turn evidence into the main visual material. Acid lime marks only verified state and decisive action.",
+    "keyCharacteristics": ["White capsule stage", "Black editorial canvas", "Acid-lime proof marks", "Oversized grotesk type", "Rounded metric bands", "Product-specific operational panels"],
+    "rules": [
+      { "name": "The Proof-Mark Rule", "body": "Lime means state, selection, citation, or action.", "section": "colors" },
+      { "name": "The Printed-Surface Rule", "body": "Use solid paper and graphite surfaces; avoid glass.", "section": "elevation" }
+    ],
+    "dos": ["Use operational content as the hero asset.", "Keep Thai and English content readable."],
+    "donts": ["Do not present synthetic metrics as live telemetry.", "Do not use the discarded isometric orbit language."]
+  }
+}

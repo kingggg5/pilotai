@@ -1,0 +1,7 @@
+services:
+  api:
+    ports: ["8000:8000"]
+  web:
+    ports: ["3000:3000"]
+  otel-collector:
+    ports: ["4317:4317", "4318:4318"]

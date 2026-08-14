@@ -1,0 +1,7 @@
+{"id":"en-refund-window","query":"What is the return window for an unopened appliance?","relevant_document_ids":["policy-refund-01"],"relevant_pages":[12]}
+{"id":"th-refund-window","query":"สินค้าที่ยังไม่แกะกล่องคืนได้ภายในกี่วัน","relevant_document_ids":["policy-refund-01"],"relevant_pages":[12]}
+{"id":"en-refund-timing","query":"How many business days until an approved refund reaches the original card?","relevant_document_ids":["policy-refund-02"],"relevant_pages":[14]}
+{"id":"th-refund-timing","query":"เงินคืนที่อนุมัติแล้วจะเข้าช่องทางเดิมภายในกี่วันทำการ","relevant_document_ids":["policy-refund-02"],"relevant_pages":[14]}
+{"id":"en-order-tracking","query":"How can a customer track a shipped order?","relevant_document_ids":["policy-order-01"],"relevant_pages":[7]}
+{"id":"en-cancellation","query":"Can an order be cancelled after it has shipped?","relevant_document_ids":["policy-cancel-01"],"relevant_pages":[9]}
+{"id":"en-security","query":"What should staff do after suspected account takeover or payment fraud?","relevant_document_ids":["policy-security-01"],"relevant_pages":[21]}

@@ -1,0 +1,34 @@
+name: AI security scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-security
+  cancel-in-progress: false
+
+jobs:
+  red-team:
+    if: vars.SERVICEPILOT_REDTEAM_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate endpoint configuration
+        env:
+          SERVICEPILOT_EVAL_URL: ${{ vars.SERVICEPILOT_EVAL_URL }}
+        run: test -n "$SERVICEPILOT_EVAL_URL"
+      - name: Run Promptfoo red team
+        uses: promptfoo/promptfoo-action@v1
+        with:
+          type: redteam
+          config: evals/promptfoo/redteam.yaml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SERVICEPILOT_EVAL_URL: ${{ vars.SERVICEPILOT_EVAL_URL }}

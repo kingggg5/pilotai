@@ -54,6 +54,47 @@ flowchart LR
 
 Business rules live in services and the workflow layer, not in route handlers or UI components. Repository interfaces isolate PostgreSQL from domain logic. Filters and parsers are pure functions so they can be tested independently.
 
+### AI decision flow
+
+```mermaid
+flowchart TD
+    A["Customer message or purchase request"] --> B["Auth, validation, tenant scope, rate limit"]
+    B --> C["Ticket classification<br/>Traditional ML"]
+    C --> D{"Request type"}
+    D -->|"Order or refund status"| E["Read-only PostgreSQL tool"]
+    D -->|"Policy or support question"| F["Hybrid document retrieval"]
+    E --> G{"Verified evidence sufficient?"}
+    F --> G
+    G -->|"No"| H["Abstain and request more information"]
+    G -->|"Yes"| I["Draft answer<br/>Optional generative AI"]
+    I --> J["Deterministic policy check"]
+    J -->|"Blocked"| K["Refuse safely"]
+    J -->|"Read-only"| L["Return answer with citation"]
+    J -->|"Write or high risk"| M["Pause for human approval"]
+    M -->|"Reject"| N["No side effect"]
+    M -->|"Approve"| O["Create escalation and audit event"]
+
+    classDef ai fill:#d8ffb7,stroke:#4d8f1f,color:#0a0a08,stroke-width:2px;
+    classDef human fill:#fff2b8,stroke:#9c6f00,color:#0a0a08,stroke-width:2px;
+    class C,I ai;
+    class M human;
+```
+
+Green nodes use AI or machine learning. The approval node is a human decision. Every other node is deterministic application code or a database operation.
+
+| Part | Uses AI? | Production behavior |
+| --- | --- | --- |
+| Ticket category and urgency | Yes, traditional ML | Local character n-gram Naive Bayes; no external model call |
+| Policy/document retrieval | Optional | PostgreSQL full-text + pgvector; the default hash embedder is local and non-generative, while `EMBEDDING_PROVIDER=openai` enables OpenAI embeddings |
+| Response drafting | Optional generative AI | OpenAI Responses API only when `AI_MODE=openai` and verified evidence exists; `store: false`; local template mode is the default |
+| LangGraph workflow | No | Typed orchestration, pause/resume, and state transitions only |
+| Policy and security decisions | No | Deterministic rules can refuse unsafe requests or require approval |
+| Order/refund lookup | No | Tenant-scoped, read-only repository calls |
+| Escalation/write action | No autonomous AI | A human must approve before the repository write runs |
+| Auth, rate limiting, audit, metrics | No | Deterministic infrastructure and application controls |
+
+The language model never authorizes a write action, chooses tenant access, or bypasses the evidence threshold. See [AI flow and trust boundaries](./docs/ai-flow.md) for the full execution contract.
+
 ## Technology stack
 
 | Layer | Technology |

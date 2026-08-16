@@ -88,6 +88,18 @@ export function CustomerTicketForm({ language, copy, profile, initialMessage = "
     );
   }
 
+  const quickTopics = language === "th" ? [
+    { label: "ติดตามพัสดุ", template: "สวัสดีครับ อยากทราบว่าคำสั่งซื้อ ORD-1001 ของผมจัดส่งถึงวันไหน และติดตามพัสดุได้ที่ไหนครับ" },
+    { label: "ขอคืนสินค้า / คืนเงิน", template: "สวัสดีครับ ต้องการสอบถามขั้นตอนการขอคืนสินค้าและเงื่อนไขการคืนเงินครับ" },
+    { label: "สอบถามข้อมูลสินค้า", template: "สวัสดีครับ ต้องการสอบถามรายละเอียดสเปกและความจุของสินค้า iPhone 17 Pro Max เพิ่มเติมครับ" },
+    { label: "ปัญหาการชำระเงิน", template: "สวัสดีครับ ชำระเงินแล้วแต่สถานะยังไม่ปรับปรุง รบกวนช่วยตรวจสอบยอดเงินให้หน่อยครับ" },
+  ] : [
+    { label: "Track Order", template: "Hello, could you please check the shipping status for order ORD-1001?" },
+    { label: "Return & Refund", template: "Hello, I would like to know the return policy and refund process." },
+    { label: "Product Specs", template: "Hello, I have a question regarding iPhone 17 Pro Max specifications and availability." },
+    { label: "Payment Support", template: "Hello, I completed the payment but haven't received confirmation yet." },
+  ];
+
   return (
     <section className="conversation-card" aria-labelledby="ticket-form-title">
       <p className="section-label">{copy.customer.formTitle}</p>
@@ -97,7 +109,29 @@ export function CustomerTicketForm({ language, copy, profile, initialMessage = "
           <label><span>{copy.customer.name}</span><input required readOnly={Boolean(profile)} maxLength={128} autoComplete="name" value={form.customer} onChange={(event) => update("customer", event.target.value)} /></label>
           <label><span>{copy.customer.contact}</span><input required readOnly={Boolean(profile)} maxLength={128} autoComplete="email" value={form.customerId} onChange={(event) => update("customerId", event.target.value)} /></label>
         </div>
-        <label><span>{copy.customer.order}</span><input maxLength={128} autoComplete="off" value={form.orderId} onChange={(event) => update("orderId", event.target.value)} /></label>
+        <label><span>{copy.customer.order}</span><input maxLength={128} autoComplete="off" placeholder="ORD-1001 (optional)" value={form.orderId} onChange={(event) => update("orderId", event.target.value)} /></label>
+
+        <div className="quick-topics" aria-label="Suggested topics">
+          <span className="quick-topics-label">{language === "th" ? "หัวข้อยอดนิยม (คลิกเพื่อกรอกอัตโนมัติ):" : "Quick Topics (click to pre-fill):"}</span>
+          <div className="quick-pills">
+            {quickTopics.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className="pill-btn"
+                onClick={() => {
+                  update("message", item.template);
+                  if (item.template.includes("ORD-1001") && !form.orderId) {
+                    update("orderId", "ORD-1001");
+                  }
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <label>
           <span>{copy.customer.message}</span>
           <textarea required maxLength={8_000} rows={7} placeholder={copy.customer.messagePlaceholder} value={form.message} onChange={(event) => update("message", event.target.value)} />

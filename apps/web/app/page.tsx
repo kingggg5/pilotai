@@ -38,8 +38,7 @@ export default async function StorefrontPage({ searchParams }: { searchParams: P
             <h1 id="product-title">{product.name}</h1>
             <p className="product-subtitle">{copy.commerce.subtitle}</p>
             <div className="product-meta"><span>{product.variant}</span><small>{copy.commerce.availability}</small></div>
-            <div className="product-price"><strong>{formatThb(product.priceThb, language)}</strong><span>{copy.commerce.priceNote}</span></div>
-            <ProductActions productId={product.id} language={language} copy={copy} />
+            <ProductActions productId={product.id} language={language} copy={copy} basePrice={product.priceThb} />
           </div>
           <figure className="product-visual">
             <Image className="product-image" src={product.imageUrl} alt={`${product.name} ${product.variant}, front and back view`} width={1600} height={900} priority sizes="(max-width: 760px) 100vw, 58vw" />

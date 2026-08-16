@@ -12,20 +12,20 @@ const repository = new MemoryKnowledgeRepository(new HashEmbedder());
 for (const document of documents) await repository.upsert(document, "tenant-local");
 const cases = [];
 for (const row of rows) {
-  const retrieved = await repository.search(row.query, k, "tenant-local");
-  const rank = retrieved.findIndex((doc) => row.relevant_document_ids.includes(doc.id));
-  const relevant = retrieved.find((doc) => row.relevant_document_ids.includes(doc.id));
-  cases.push({
-    id: row.id,
-    retrieved: retrieved.map((doc) => doc.id),
-    recall_at_k: relevant ? 1 : 0,
-    reciprocal_rank: rank >= 0 ? 1 / (rank + 1) : 0,
-    citation_correct: Boolean(
-      relevant?.page_number &&
-        row.relevant_pages.includes(relevant.page_number) &&
-        relevant.citation
-    ),
-  });
+	const retrieved = await repository.search(row.query, k, "tenant-local");
+	const rank = retrieved.findIndex((doc) => row.relevant_document_ids.includes(doc.id));
+	const relevant = retrieved.find((doc) => row.relevant_document_ids.includes(doc.id));
+	cases.push({
+		id: row.id,
+		retrieved: retrieved.map((doc) => doc.id),
+		recall_at_k: relevant ? 1 : 0,
+		reciprocal_rank: rank >= 0 ? 1 / (rank + 1) : 0,
+		citation_correct: Boolean(
+			relevant?.page_number &&
+				row.relevant_pages.includes(relevant.page_number) &&
+				relevant.citation
+		),
+	});
 }
 const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
 const metrics = { recall_at_k: mean(cases.map((row) => row.recall_at_k)), mrr: mean(cases.map((row) => row.reciprocal_rank)), citation_accuracy: mean(cases.map((row) => Number(row.citation_correct))) };

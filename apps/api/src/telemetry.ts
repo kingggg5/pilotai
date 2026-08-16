@@ -7,13 +7,13 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic
 import type { Settings } from "./config.js";
 
 export function startTelemetry(settings: Settings) {
-  if (!settings.OTEL_ENABLED) return undefined;
-  const base = settings.OTEL_EXPORTER_OTLP_ENDPOINT?.replace(/\/$/u, "");
-  const sdk = new NodeSDK({
-    resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: settings.OTEL_SERVICE_NAME, [ATTR_SERVICE_VERSION]: settings.APP_VERSION }),
-    traceExporter: new OTLPTraceExporter(base ? { url: `${base}/v1/traces` } : undefined),
-    instrumentations: [getNodeAutoInstrumentations()],
-  });
-  sdk.start();
-  return sdk;
+	if (!settings.OTEL_ENABLED) return undefined;
+	const base = settings.OTEL_EXPORTER_OTLP_ENDPOINT?.replace(/\/$/u, "");
+	const sdk = new NodeSDK({
+		resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: settings.OTEL_SERVICE_NAME, [ATTR_SERVICE_VERSION]: settings.APP_VERSION }),
+		traceExporter: new OTLPTraceExporter(base ? { url: `${base}/v1/traces` } : undefined),
+		instrumentations: [getNodeAutoInstrumentations()],
+	});
+	sdk.start();
+	return sdk;
 }

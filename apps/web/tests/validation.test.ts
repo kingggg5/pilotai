@@ -5,13 +5,13 @@ import { auditPageUrl, parseAuditFilters } from "../lib/audit-filters.ts";
 import { parseQueueFilters, queuePageUrl } from "../lib/queue-filters.ts";
 
 const draft = parseTicketDraft({
-  message: "Where is my order?",
-  customer: "Customer",
-  customerId: "customer@example.com",
-  channel: "web",
-  locale: "en",
-  handlingMode: "autopilot",
-  idempotencyKey: "request-12345678",
+	message: "Where is my order?",
+	customer: "Customer",
+	customerId: "customer@example.com",
+	channel: "web",
+	locale: "en",
+	handlingMode: "autopilot",
+	idempotencyKey: "request-12345678",
 });
 assert.equal(draft?.idempotencyKey, "request-12345678");
 assert.equal(draft?.handlingMode, "autopilot");

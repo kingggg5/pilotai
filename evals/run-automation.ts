@@ -11,9 +11,9 @@ const rows = await jsonLines<Case>(option("--dataset", resolve(root, "evals/gold
 const classifier = new TicketClassifier();
 const automation = new AutomationService();
 const cases = rows.map((row) => {
-  const entities = automation.extract({ ...row.input, metadata: {} }, classifier.predict(row.input.message));
-  const actual: Expected = { order_id: entities.order_id, refund_id: entities.refund_id, language: entities.language, missing_fields: entities.missing_fields };
-  return { id: row.id, passed: JSON.stringify(actual) === JSON.stringify(row.expected), expected: row.expected, actual };
+	const entities = automation.extract({ ...row.input, metadata: {} }, classifier.predict(row.input.message));
+	const actual: Expected = { order_id: entities.order_id, refund_id: entities.refund_id, language: entities.language, missing_fields: entities.missing_fields };
+	return { id: row.id, passed: JSON.stringify(actual) === JSON.stringify(row.expected), expected: row.expected, actual };
 });
 const accuracy = cases.filter((row) => row.passed).length / cases.length;
 const report = { case_count: cases.length, metrics: { entity_exact_match: accuracy }, passed: accuracy === 1, cases };

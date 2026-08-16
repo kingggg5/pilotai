@@ -17,19 +17,19 @@ import { parseQueueFilters } from "@/lib/queue-filters";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const params = await searchParams;
-  const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
-  const language = parseLanguage(first(params.lang));
-  const page = Math.max(1, Number.parseInt(first(params.page) || "1", 10) || 1);
-  const filters = parseQueueFilters(params);
-  if (!await hasAdminSession()) redirect(`/admin/login?lang=${language}`);
-  const copy = getCopy(language);
-  const data = await getConsoleData((page - 1) * 50, 50, filters);
-  return (
-    <div className="admin-page">
-      <AdminHeader copy={copy} language={language} current="queue" />
-      <section className="admin-heading"><div><h1>{copy.admin.title}</h1><p>{copy.admin.subtitle}</p></div><span><i />{copy.admin.refreshed} {new Date(data.checkedAt).toLocaleTimeString(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit" })}</span></section>
-      <AdminWorkspace initialData={data} copy={copy} language={language} filters={filters} />
-    </div>
-  );
+	const params = await searchParams;
+	const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+	const language = parseLanguage(first(params.lang));
+	const page = Math.max(1, Number.parseInt(first(params.page) || "1", 10) || 1);
+	const filters = parseQueueFilters(params);
+	if (!await hasAdminSession()) redirect(`/admin/login?lang=${language}`);
+	const copy = getCopy(language);
+	const data = await getConsoleData((page - 1) * 50, 50, filters);
+	return (
+		<div className="admin-page">
+			<AdminHeader copy={copy} language={language} current="queue" />
+			<section className="admin-heading"><div><h1>{copy.admin.title}</h1><p>{copy.admin.subtitle}</p></div><span><i />{copy.admin.refreshed} {new Date(data.checkedAt).toLocaleTimeString(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit" })}</span></section>
+			<AdminWorkspace initialData={data} copy={copy} language={language} filters={filters} />
+		</div>
+	);
 }

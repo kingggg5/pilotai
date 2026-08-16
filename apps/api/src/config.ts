@@ -24,7 +24,7 @@ const schema = z.object({
   OPENAI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(20_000),
   OPENAI_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(0),
   GEMINI_API_KEY: optional,
-  GEMINI_MODEL: z.string().default("gemini-1.5-flash"),
+  GEMINI_MODEL: z.string().default("gemini-3-flash-preview"),
   AI_FALLBACK_ON_ERROR: boolean,
 
   PERSISTENCE_MODE: z.enum(["memory", "postgres"]).default("memory"),

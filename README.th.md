@@ -155,7 +155,7 @@ npm run check
 
 คำสั่งนี้จะรันการตรวจสอบ:
 1. การสแกนความปลอดภัยและช่องโหว่ (P1/P2/P3 Quality Gate)
-2. Typecheck, Unit Tests (26/26 tests) และ Production Build ของ API
+2. Typecheck, Unit Tests (27/27 tests) และ Production Build ของ API
 3. AI Evaluators (Classifier F1-Score, RAG Recall@k, Automation Match, Golden Suite)
 4. Lint, Typecheck, Unit Tests และ Next.js Production Build ของ Web
 5. การตรวจสอบความถูกต้องของไฟล์ Docker Compose ทั้งชุด Development และ Production
@@ -165,4 +165,4 @@ npm run check
 ## ข้อมูล Repository บน GitHub
 
 - **Repository:** [kingggg5/pilotai](https://github.com/kingggg5/pilotai)
-- โค้ดได้รับการปรับปรุง ตรวจสอบความปลอดภัย และผลักดันขึ้นทั้ง Branch `main` และ `king-dev` พร้อมใช้งานสำหรับการพรีเซนต์และสมัครงานเรียบร้อยแล้ว
+- โค้ดได้รับการปรับปรุง ตรวจสอบความปลอดภัย และรวมไว้ใน Branch `main` เพียง Branch เดียว พร้อมใช้งานสำหรับการพรีเซนต์และสมัครงาน

@@ -47,12 +47,12 @@ export default async function StorefrontPage({ searchParams }: { searchParams: P
         </section>
 
         <section className="product-facts" aria-label={copy.commerce.details}>
-          {copy.commerce.features.map((feature) => <span key={feature}>{feature}</span>)}
-        </section>
-
-        <section className="product-notes">
-          <div className="purchase-process"><h2>{copy.commerce.processTitle}</h2><p>{copy.commerce.processIntro}</p><ol>{copy.commerce.processSteps.map((step, index) => <li key={step}><span>{index + 1}</span>{step}</li>)}</ol></div>
-          <aside><p>{copy.commerce.disclosure}</p>{product.sourceUrl ? <Link href={product.sourceUrl} target="_blank" rel="noreferrer">{copy.commerce.sourceLink}<span aria-hidden="true">↗</span></Link> : null}<small>{copy.commerce.source}</small></aside>
+          {copy.commerce.features.map((feature) => (
+            <div key={feature} className="product-fact-card">
+              <span className="fact-dot" aria-hidden="true" />
+              <strong>{feature}</strong>
+            </div>
+          ))}
         </section>
       </main>
     </div>

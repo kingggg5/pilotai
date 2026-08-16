@@ -72,6 +72,28 @@ export async function buildContainer(settings: Settings): Promise<AppContainer> 
     knowledge = new MemoryKnowledgeRepository(embedder);
     escalations = new MemoryEscalationRepository();
     auditRepository = new MemoryAuditRepository();
+
+    await products.upsert({
+      id: "iphone-17-pro-max-256gb-deep-blue",
+      name: "iPhone 17 Pro Max",
+      variant: "256GB · Deep Blue",
+      unit_price: 48_900,
+      currency: "THB",
+      image_url: "/products/iphone-17-pro-max-deep-blue-full.webp",
+      source_url: "https://www.apple.com/th-en/shop/buy-iphone/iphone-17-pro/6.9-inch-display-256gb-deep-blue",
+      active: true,
+    }, "*");
+
+    await knowledge.upsert({
+      id: "return-policy",
+      title: "Return and Refund Policy / นโยบายการคืนสินค้าและคืนเงิน",
+      content: "Customers can request a refund within 14 days of delivery for unopened products. Refunds are processed within 3-5 business days.",
+      source: "policy://return-refund",
+      page_label: "Section 2.1 (Refund Terms)",
+      locale: "multi",
+      acl: {},
+      metadata: { category: "policy" },
+    }, "*");
   }
 
   const tools = new BusinessTools(orderStatuses, refundStatuses, knowledge, escalations, settings.RETRIEVAL_MIN_SCORE);

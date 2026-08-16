@@ -7,7 +7,7 @@ import { AutomationService } from "./automation.js";
 import { TicketClassifier } from "./classifier.js";
 import type { Settings } from "./config.js";
 import { AssistanceWorkflow } from "./workflow.js";
-import { BusinessTools, OperationsMetrics, PolicyService } from "./services.js";
+import { BusinessTools, ModelRoutingService, OperationsMetrics, PolicyService } from "./services.js";
 import { MemoryAuditRepository, MemoryCustomerRepository, MemoryEscalationRepository, MemoryKnowledgeRepository, MemoryOrderRepository, MemoryOrderStatusRepository, MemoryProductRepository, MemoryRefundStatusRepository, MemoryRunRepository, MemoryTicketRepository, PostgresAuditRepository, PostgresCustomerRepository, PostgresEscalationRepository, PostgresKnowledgeRepository, PostgresOrderRepository, PostgresOrderStatusRepository, PostgresProductRepository, PostgresRefundStatusRepository, PostgresResources, PostgresRunRepository, PostgresTicketRepository, type AuditRepository, type CustomerRepository, type KnowledgeRepository, type OrderRepository, type ProductRepository, type RunRepository, type TicketRepository } from "./repositories/index.js";
 import { buildRateLimiter, type RateLimiter } from "./security.js";
 
@@ -22,6 +22,7 @@ export interface AppContainer {
   knowledge: KnowledgeRepository;
   tools: BusinessTools;
   classifier: TicketClassifier;
+  modelRouter: ModelRoutingService;
   metrics: OperationsMetrics;
   rateLimiter: RateLimiter;
   audit: AuditService;
@@ -75,8 +76,9 @@ export async function buildContainer(settings: Settings): Promise<AppContainer> 
 
   const tools = new BusinessTools(orderStatuses, refundStatuses, knowledge, escalations, settings.RETRIEVAL_MIN_SCORE);
   const classifier = new TicketClassifier();
+  const modelRouter = new ModelRoutingService();
   const workflow = new AssistanceWorkflow(classifier, tools, new PolicyService(), new AutomationService(), buildLanguageModel(settings), runs, checkpointer, checkpointerBackend);
   const rateLimiter = await buildRateLimiter(settings);
   resources.push(rateLimiter);
-  return { settings, workflow, runs, tickets, customers, orders, products, knowledge, tools, classifier, metrics: new OperationsMetrics(), rateLimiter, audit: new AuditService(auditRepository), async close() { for (const resource of resources.reverse()) await resource.close(); } };
+  return { settings, workflow, runs, tickets, customers, orders, products, knowledge, tools, classifier, modelRouter, metrics: new OperationsMetrics(), rateLimiter, audit: new AuditService(auditRepository), async close() { for (const resource of resources.reverse()) await resource.close(); } };
 }

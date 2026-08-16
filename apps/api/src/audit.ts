@@ -27,6 +27,8 @@ export const AuditActions = {
   orderCreated: "order.created",
   refundRead: "refund.status_read",
   catalogUpdated: "catalog.product_updated",
+  feedbackRecorded: "ticket.feedback_recorded",
+  kpiRequested: "analytics.kpi_read",
   webhookAccepted: "webhook.accepted",
   webhookReplay: "webhook.idempotent_replay",
   requestDenied: "request.denied",

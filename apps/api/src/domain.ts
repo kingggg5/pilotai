@@ -240,3 +240,41 @@ export interface Principal { subject: string; tenant_id: string; roles: string[]
 export interface LiveOrderStatus { order_id: string; status: string; estimated_delivery?: string | null; tracking_number?: string | null; updated_at: string }
 export interface RefundStatus { order_id: string; refund_id?: string | null; status: string; amount?: number | null; currency?: string | null; updated_at: string }
 export interface Escalation { escalation_id: string; status: string; priority: Priority; created_at: string }
+
+export const TicketFeedbackRequest = z.object({
+  feedback_type: z.enum(["thumbs_up", "thumbs_down", "edited_reply", "escalated"]),
+  rating: z.number().int().min(1).max(5).optional(),
+  original_draft: z.string().max(10_000).optional(),
+  edited_reply: z.string().max(10_000).optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type TicketFeedbackRequest = z.infer<typeof TicketFeedbackRequest>;
+
+export const ModelRoutingInfo = z.object({
+  model: z.string(),
+  provider: z.string(),
+  reason: z.string(),
+  estimated_input_tokens: z.number().int().nonnegative(),
+  estimated_output_tokens: z.number().int().nonnegative(),
+  estimated_cost_usd: z.number().nonnegative(),
+  estimated_cost_thb: z.number().nonnegative(),
+});
+export type ModelRoutingInfo = z.infer<typeof ModelRoutingInfo>;
+
+export const AnalyticsKPI = z.object({
+  total_tickets: z.number().int().nonnegative(),
+  resolved_tickets: z.number().int().nonnegative(),
+  zero_touch_rate: z.number().min(0).max(100),
+  human_assisted_rate: z.number().min(0).max(100),
+  avg_confidence: z.number().min(0).max(1),
+  estimated_hours_saved: z.number().nonnegative(),
+  estimated_cost_saved_thb: z.number().nonnegative(),
+  csat_score: z.number().min(0).max(5),
+  sentiment_distribution: z.object({
+    positive: z.number().nonnegative(),
+    neutral: z.number().nonnegative(),
+    urgent_dispute: z.number().nonnegative(),
+  }),
+});
+export type AnalyticsKPI = z.infer<typeof AnalyticsKPI>;
+

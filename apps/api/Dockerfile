@@ -1,4 +1,4 @@
-FROM node:22-alpine@sha256:d82e21e64d048d06b539a489725f0e1329a4a754160de444c45b73d6b38c2368 AS build
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -6,7 +6,7 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
-FROM node:22-alpine@sha256:d82e21e64d048d06b539a489725f0e1329a4a754160de444c45b73d6b38c2368 AS runtime
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup -S servicepilot && adduser -S servicepilot -G servicepilot

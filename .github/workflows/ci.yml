@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5a1 # v4.1.0
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: "22"
           cache: npm
@@ -33,13 +33,13 @@ jobs:
       - run: npm --prefix apps/api run eval:automation
       - run: npm --prefix apps/api run eval:rag
       - run: npm --prefix apps/api run eval:golden
-      - run: apps/api/node_modules/.bin/tsx --test evals/golden-contract.test.ts
+      - run: npx --prefix apps/api tsx --test evals/golden-contract.test.ts
 
   frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5a1 # v4.1.0
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: "22"
           cache: npm

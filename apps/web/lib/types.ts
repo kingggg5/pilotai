@@ -185,3 +185,28 @@ export interface AuditFilters {
   outcome?: AuditOutcome;
   resourceId?: string;
 }
+
+export interface KpiAnalytics {
+  totalTickets: number;
+  resolvedTickets: number;
+  zeroTouchRate: number;
+  humanAssistedRate: number;
+  avgConfidence: number;
+  estimatedHoursSaved: number;
+  estimatedCostSavedThb: number;
+  csatScore: number;
+  sentimentDistribution: {
+    positive: number;
+    neutral: number;
+    urgentDispute: number;
+  };
+}
+
+export interface TicketFeedbackInput {
+  feedbackType: "thumbs_up" | "thumbs_down" | "edited_reply" | "escalated";
+  rating?: number;
+  originalDraft?: string;
+  editedReply?: string;
+  notes?: string;
+}
+

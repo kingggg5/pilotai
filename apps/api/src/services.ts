@@ -90,3 +90,47 @@ export class OperationsMetrics {
   resolveApproval() { this.pending = Math.max(0, this.pending - 1); }
   snapshot() { const values = [...this.latencies].sort((a, b) => a - b); const percentile = (value: number) => values[Math.max(0, Math.ceil(values.length * value) - 1)] ?? 0; return { requests_total: this.requests, failures_total: this.failures, approvals_pending: this.pending, abstentions_total: this.abstentions, automation_evaluated_total: this.automationEvaluated, automation_completed_total: this.autoCompleted, automation_routed_total: this.autoRouted, customer_followups_total: this.customerFollowups, handling_manual_total: this.manualSelected, handling_copilot_total: this.copilotSelected, handling_autopilot_total: this.autopilotSelected, latency_p50_ms: percentile(0.5), latency_p95_ms: percentile(0.95), metrics: [{ name: "failure_rate", value: this.requests ? this.failures / this.requests : 0, unit: "ratio", status: this.failures ? "watch" : "healthy" }, { name: "approval_backlog", value: this.pending, unit: "tickets", status: this.pending > 20 ? "watch" : "healthy" }, { name: "automation_rate", value: this.automationEvaluated ? this.autoCompleted / this.automationEvaluated : 0, unit: "ratio", status: "healthy" }, { name: "autopilot_adoption", value: this.automationEvaluated ? this.autopilotSelected / this.automationEvaluated : 0, unit: "ratio", status: "healthy" }] }; }
 }
+
+export class ModelRoutingService {
+  route(category: Category, priority: Priority, messageLength: number) {
+    const inputTokens = Math.max(20, Math.ceil(messageLength / 3));
+    const isUrgent = priority === "urgent" || category === "security" || category === "billing";
+    const isComplex = priority === "high" || category === "refund_request";
+
+    let model = "gpt-4o-mini";
+    let provider = "openai";
+    let reason = "Standard ticket category: routed to fast, cost-efficient small model";
+    let outputTokens = 120;
+    let costPer1MInput = 0.15;
+    let costPer1MOutput = 0.60;
+
+    if (isUrgent) {
+      model = "gpt-4o";
+      reason = "Urgent/Security ticket: routed to high-reasoning flagship model";
+      outputTokens = 250;
+      costPer1MInput = 2.50;
+      costPer1MOutput = 10.00;
+    } else if (isComplex) {
+      model = "claude-3-5-haiku";
+      provider = "anthropic";
+      reason = "Complex request: routed to balanced latency-cost model";
+      outputTokens = 180;
+      costPer1MInput = 0.80;
+      costPer1MOutput = 4.00;
+    }
+
+    const costUsd = Number(((inputTokens * costPer1MInput + outputTokens * costPer1MOutput) / 1_000_000).toFixed(6));
+    const costThb = Number((costUsd * 36.0).toFixed(4));
+
+    return {
+      model,
+      provider,
+      reason,
+      estimated_input_tokens: inputTokens,
+      estimated_output_tokens: outputTokens,
+      estimated_cost_usd: costUsd,
+      estimated_cost_thb: costThb,
+    };
+  }
+}
+

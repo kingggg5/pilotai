@@ -17,12 +17,14 @@ const schema = z.object({
   // shipproof-ignore SP109
   WEB_ORIGIN: z.string().default("http://localhost:3000"),
 
-  AI_MODE: z.enum(["local", "openai"]).default("local"),
+  AI_MODE: z.enum(["local", "openai", "gemini"]).default("local"),
   OPENAI_API_KEY: optional,
   OPENAI_MODEL: z.string().default("gpt-5.6-luna"),
   OPENAI_REASONING_EFFORT: z.enum(["none", "low", "medium", "high", "xhigh"]).default("low"),
   OPENAI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(20_000),
   OPENAI_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(0),
+  GEMINI_API_KEY: optional,
+  GEMINI_MODEL: z.string().default("gemini-1.5-flash"),
   AI_FALLBACK_ON_ERROR: boolean,
 
   PERSISTENCE_MODE: z.enum(["memory", "postgres"]).default("memory"),
@@ -55,6 +57,9 @@ const schema = z.object({
   if (env.AUTH_MODE === "jwt") require(env.JWT_SECRET, "JWT_SECRET");
   if (env.AI_MODE === "openai" || env.EMBEDDING_PROVIDER === "openai") {
     require(env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  }
+  if (env.AI_MODE === "gemini") {
+    require(env.GEMINI_API_KEY || env.OPENAI_API_KEY, "GEMINI_API_KEY");
   }
   if (env.PERSISTENCE_MODE === "postgres") require(env.DATABASE_URL, "DATABASE_URL");
   if (env.APP_ENV === "production") {

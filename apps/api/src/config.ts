@@ -17,7 +17,7 @@ const schema = z.object({
 	// shipproof-ignore SP109
 	WEB_ORIGIN: z.string().default("http://localhost:3000"),
 
-	AI_MODE: z.enum(["local", "openai", "gemini"]).default("local"),
+	AI_MODE: z.enum(["local", "openai", "gemini", "groq"]).default("local"),
 	OPENAI_API_KEY: optional,
 	OPENAI_MODEL: z.string().default("gpt-5.6-luna"),
 	OPENAI_REASONING_EFFORT: z.enum(["none", "low", "medium", "high", "xhigh"]).default("low"),
@@ -25,6 +25,8 @@ const schema = z.object({
 	OPENAI_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(0),
 	GEMINI_API_KEY: optional,
 	GEMINI_MODEL: z.string().default("gemini-flash-latest"),
+	GROQ_API_KEY: optional,
+	GROQ_MODEL: z.string().default("llama-3.1-8b-instant"),
 	AI_FALLBACK_ON_ERROR: boolean,
 
 	PERSISTENCE_MODE: z.enum(["memory", "postgres"]).default("memory"),
@@ -61,11 +63,12 @@ const schema = z.object({
 	if (env.AI_MODE === "gemini") {
 		require(env.GEMINI_API_KEY || env.OPENAI_API_KEY, "GEMINI_API_KEY");
 	}
+	if (env.AI_MODE === "groq") require(env.GROQ_API_KEY, "GROQ_API_KEY");
 	if (env.PERSISTENCE_MODE === "postgres") require(env.DATABASE_URL, "DATABASE_URL");
 	if (env.APP_ENV === "production") {
 		if (env.AUTH_MODE !== "jwt") context.addIssue({ code: "custom", path: ["AUTH_MODE"], message: "AUTH_MODE=jwt is required in production" });
 		if (env.PERSISTENCE_MODE !== "postgres") context.addIssue({ code: "custom", path: ["PERSISTENCE_MODE"], message: "PERSISTENCE_MODE=postgres is required in production" });
-		if (env.AI_MODE !== "openai") context.addIssue({ code: "custom", path: ["AI_MODE"], message: "AI_MODE=openai is required in production" });
+		if (env.AI_MODE !== "openai" && env.AI_MODE !== "groq") context.addIssue({ code: "custom", path: ["AI_MODE"], message: "AI_MODE=openai or AI_MODE=groq is required in production" });
 		if (env.AI_FALLBACK_ON_ERROR) context.addIssue({ code: "custom", path: ["AI_FALLBACK_ON_ERROR"], message: "AI fallback must be disabled in production" });
 		require(env.REDIS_URL, "REDIS_URL");
 		require(env.WEBHOOK_SECRET, "WEBHOOK_SECRET");
@@ -74,7 +77,7 @@ const schema = z.object({
 
 export type Settings = z.infer<typeof schema>;
 
-const secretKeys = ["OPENAI_API_KEY", "DATABASE_URL", "JWT_SECRET", "WEBHOOK_SECRET"] as const;
+const secretKeys = ["OPENAI_API_KEY", "GROQ_API_KEY", "DATABASE_URL", "JWT_SECRET", "WEBHOOK_SECRET"] as const;
 
 function withFileSecrets(source: NodeJS.ProcessEnv) {
 	const resolved = { ...source };

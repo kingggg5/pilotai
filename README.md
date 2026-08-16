@@ -38,7 +38,7 @@ The admin queue is a shared inbox: new chat tickets appear in the queue, the tra
 - Pauses write actions such as `create_escalation` until a human approves them.
 - Exposes REST/OpenAPI as the primary interface with a thin MCP adapter.
 - Records tenant-scoped, PII-redacted, append-only audit events.
-- Uses an explicit provider boundary: local deterministic mode is the default; response drafting can be switched to OpenAI Responses API or Google Gemini with `AI_MODE`, while no Anthropic runtime adapter is enabled.
+- Uses an explicit provider boundary: local deterministic mode is the default; response drafting can be switched to OpenAI Responses API, Google Gemini, or Groq with `AI_MODE` (the documented free-plan model is `llama-3.1-8b-instant`).
 - Real-Time Operational KPI Dashboard: tracks Zero-Touch Resolution Rate %, Human-Assisted Rate %, Estimated Hours/Cost Saved in THB, and CSAT sentiment distribution.
 - Live Server-Sent Events (SSE) streaming for real-time AI classification, retrieval evidence, and token generation chunks.
 - Human-in-the-Loop (HITL) Active Learning Feedback loop capturing agent edits and satisfaction ratings for continuous model alignment.
@@ -100,7 +100,7 @@ Green nodes use AI or machine learning. The approval node is a human decision. E
 | --- | --- | --- |
 | Ticket category and urgency | Yes, traditional ML | Local character n-gram Naive Bayes; no external model call |
 | Policy/document retrieval | Optional | PostgreSQL full-text + pgvector; the default hash embedder is local and non-generative, while `EMBEDDING_PROVIDER=openai` enables OpenAI embeddings |
-| Response drafting | Optional generative AI | Google Gemini (`gemini-flash-latest` via Google AI Studio Free Tier) or OpenAI Responses API when `AI_MODE=gemini` or `AI_MODE=openai`; local template fallback mode is active by default |
+| Response drafting | Optional generative AI | Groq (`llama-3.1-8b-instant`), Google Gemini (`gemini-flash-latest`), or OpenAI Responses API; local template mode is active by default |
 | LangGraph workflow | No | Typed orchestration, pause/resume, and state transitions only |
 | Policy and security decisions | No | Deterministic rules can refuse unsafe requests or require approval |
 | Order/refund lookup | No | Tenant-scoped, read-only repository calls |
@@ -111,7 +111,7 @@ The selected handling mode is persisted with the ticket and audit trail. It neve
 
 ### Which model answers a chat?
 
-The safe development and test default is `AI_MODE=local`: `ts-char-ngram-naive-bayes-v2` classifies topic/priority, `LocalLanguageModel` drafts a grounded template, and `hash-char-gram-v2` handles local retrieval embeddings. `AI_MODE=openai` uses `OPENAI_MODEL` (default `gpt-5.6-luna`) for drafting, while `AI_MODE=gemini` uses `GEMINI_MODEL` (default `gemini-flash-latest`). Production configuration requires OpenAI mode; all write actions still require deterministic policy checks and human approval.
+The safe development and test default is `AI_MODE=local`: `ts-char-ngram-naive-bayes-v2` classifies topic/priority, `LocalLanguageModel` drafts a grounded template, and `hash-char-gram-v2` handles local retrieval embeddings. `AI_MODE=groq` uses `GROQ_MODEL` (default `llama-3.1-8b-instant`), `AI_MODE=openai` uses `OPENAI_MODEL` (default `gpt-5.6-luna`), and `AI_MODE=gemini` uses `GEMINI_MODEL` (default `gemini-flash-latest`). Production configuration allows OpenAI or Groq mode; all write actions still require deterministic policy checks and human approval.
 
 ## Technology stack
 
@@ -120,7 +120,7 @@ The safe development and test default is `AI_MODE=local`: `ts-char-ngram-naive-b
 | Web | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | API | Fastify 5, Zod 4, TypeScript, Node.js 22 |
 | Workflow | Deterministic LangGraph.js graph |
-| AI providers | Local deterministic template (default), OpenAI Responses API, or Google Gemini API; selected by `AI_MODE` |
+| AI providers | Local deterministic template (default), Groq, OpenAI Responses API, or Google Gemini API; selected by `AI_MODE` |
 | Data | PostgreSQL 17, pgvector, Redis 8 |
 | Gateway | Nginx 1.29 |
 | Operations | Docker Compose, OpenTelemetry, GitHub Actions, Promptfoo |
@@ -165,7 +165,7 @@ The project commands use a small Node.js CLI, so the same workflow works on Wind
 Copy-Item .env.example .env.local
 ```
 
-The default `AI_MODE=local` keeps customer messages on the machine and does not require an API key. To use OpenAI, set `AI_MODE=openai` and provide `OPENAI_API_KEY` to the API after approving data egress under your organization policy. Catalog access, purchase triage, and hash embeddings continue to work without OpenAI embeddings.
+The default `AI_MODE=local` keeps customer messages on the machine and does not require an API key. To use Groq's free-plan developer limits, set `AI_MODE=groq`, `GROQ_MODEL=llama-3.1-8b-instant`, and provide `GROQ_API_KEY` to the API after approving data egress under your organization policy. OpenAI and Gemini remain optional alternatives; catalog access, purchase triage, and hash embeddings continue to work without external embeddings.
 
 ### 2. Start the stack
 

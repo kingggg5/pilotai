@@ -28,3 +28,9 @@ test("development configuration normalizes empty optional secrets", () => {
 	assert.equal(settings.JWT_SECRET, undefined);
 	assert.equal(settings.WEBHOOK_SECRET, undefined);
 });
+
+test("Groq mode selects the documented free-plan default and requires its key", () => {
+	const settings = loadSettings({ APP_ENV: "development", AUTH_MODE: "local", PERSISTENCE_MODE: "memory", AI_MODE: "groq", GROQ_API_KEY: "test-groq-key" });
+	assert.equal(settings.GROQ_MODEL, "llama-3.1-8b-instant");
+	assert.throws(() => loadSettings({ APP_ENV: "development", AUTH_MODE: "local", PERSISTENCE_MODE: "memory", AI_MODE: "groq" }), /GROQ_API_KEY is required/);
+});

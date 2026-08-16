@@ -17,7 +17,9 @@ export type CustomerSession = {
 	exp: number;
 };
 
-const secret = () => serverSecret("SERVICEPILOT_CUSTOMER_SESSION_SECRET") || serverSecret("SERVICEPILOT_SESSION_SECRET");
+const secret = () => serverSecret("SERVICEPILOT_CUSTOMER_SESSION_SECRET")
+	|| serverSecret("SERVICEPILOT_SESSION_SECRET")
+	|| (process.env.NODE_ENV === "production" ? undefined : "local-customer-session-secret-change-me");
 const sign = (payload: string, key: string) => createHmac("sha256", key).update(payload).digest("base64url");
 const equal = (left: string, right: string) => {
 	const a = Buffer.from(left); const b = Buffer.from(right);

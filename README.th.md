@@ -26,7 +26,7 @@ ServicePilot AI คือแพลตฟอร์มบริการลูก�
 - ลูกค้าสามารถเลือกรูปแบบการประมวลผลได้ต่อ Ticket: เจ้าหน้าที่เท่านั้น (Staff Only), ผู้ช่วย AI (Copilot), หรือ AI อัตโนมัติ (Autopilot)
 - ดึงหมายเลขอ้างอิง สอบถามข้อมูลที่ขาดหาย มอบหมายทีมงาน กำหนดลำดับความสำคัญ และปิดเคสความเสี่ยงต่ำที่ยืนยันแล้วอัตโนมัติ
 - หยุดพักคำสั่งที่มีการเขียนข้อมูล (เช่น `create_escalation`) ไว้ชั่วคราวเพื่อรอการอนุมัติจากเจ้าหน้าที่
-- ใช้ขอบเขต Provider ที่ชัดเจน: ค่าเริ่มต้นเป็นโหมด Local แบบ Deterministic, เปลี่ยนไปใช้ OpenAI Responses API หรือ Google Gemini ได้ด้วย `AI_MODE` และปัจจุบันยังไม่มี Anthropic adapter ที่ต่อใช้งานจริง
+- ใช้ขอบเขต Provider ที่ชัดเจน: ค่าเริ่มต้นเป็นโหมด Local แบบ Deterministic และเลือกใช้ OpenAI Responses API, Google Gemini หรือ Groq ได้ด้วย `AI_MODE` โดยโมเดล free-plan ที่ใช้คือ `llama-3.1-8b-instant`
 - แดชบอร์ดตัวชี้วัดประสิทธิภาพแบบเรียลไทม์ (Operational KPI Dashboard): คำนวณ Zero-Touch Resolution Rate %, อัตราการช่วยเหลือโดยมนุษย์, เวลาและงบประมาณที่ประหยัดได้จริง, คะแนน CSAT และการกระจายตัวของอารมณ์ลูกค้า
 - ระบบสตรีมมิง Server-Sent Events (SSE): สตรีมขั้นตอนการวิเคราะห์ หลักฐานที่พบ และเนื้อหาคำตอบทีละ Token แบบเรียลไทม์
 - ระบบบันทึกฟีดแบ็กจากเจ้าหน้าที่ (Human-in-the-Loop Feedback): บันทึกข้อความที่เจ้าหน้าที่แก้ไขและคะแนนประเมินเพื่อใช้เป็นข้อมูลปรับปรุงโมเดลอย่างต่อเนื่อง
@@ -54,7 +54,7 @@ flowchart LR
 
 ### โมเดลที่ใช้ตอบแชตในแต่ละโหมด
 
-ค่าเริ่มต้นสำหรับ development และ test คือ `AI_MODE=local`: `ts-char-ngram-naive-bayes-v2` ใช้จำแนกหัวข้อ/ความเร่งด่วน, `LocalLanguageModel` ใช้สร้างร่างคำตอบแบบ grounded และ `hash-char-gram-v2` ใช้ทำ embedding ภายในเครื่อง หากตั้ง `AI_MODE=openai` ระบบจะใช้ `OPENAI_MODEL` (ค่าเริ่มต้น `gpt-5.6-luna`) สำหรับร่างคำตอบ หรือ `AI_MODE=gemini` จะใช้ `GEMINI_MODEL` (ค่าเริ่มต้น `gemini-flash-latest`) โดย production บังคับใช้ OpenAI mode และทุก write action ยังต้องผ่าน Policy และการอนุมัติจากมนุษย์
+ค่าเริ่มต้นสำหรับ development และ test คือ `AI_MODE=local`: `ts-char-ngram-naive-bayes-v2` ใช้จำแนกหัวข้อ/ความเร่งด่วน, `LocalLanguageModel` ใช้สร้างร่างคำตอบแบบ grounded และ `hash-char-gram-v2` ใช้ทำ embedding ภายในเครื่อง หากตั้ง `AI_MODE=groq` จะใช้ `GROQ_MODEL` (ค่าเริ่มต้น `llama-3.1-8b-instant`), `AI_MODE=openai` จะใช้ `OPENAI_MODEL` (ค่าเริ่มต้น `gpt-5.6-luna`) หรือ `AI_MODE=gemini` จะใช้ `GEMINI_MODEL` (ค่าเริ่มต้น `gemini-flash-latest`) โดย production รองรับ OpenAI หรือ Groq และทุก write action ยังต้องผ่าน Policy และการอนุมัติจากมนุษย์
 
 ### โฟลว์การตัดสินใจของ AI (AI Decision Flow)
 
@@ -97,7 +97,7 @@ flowchart TD
 | Frontend Web | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | Backend API | Fastify 5, Zod 4, TypeScript, Node.js 22 |
 | State Machine Orchestrator | LangGraph.js |
-| AI Integration | Local deterministic template (ค่าเริ่มต้น), OpenAI Responses API หรือ Google Gemini API โดยเลือกผ่าน `AI_MODE` |
+| AI Integration | Local deterministic template (ค่าเริ่มต้น), Groq, OpenAI Responses API หรือ Google Gemini API โดยเลือกผ่าน `AI_MODE` |
 | ฐานข้อมูล | PostgreSQL 17, pgvector, Redis 8 |
 | Gateway & Reverse Proxy | Nginx 1.29 |
 | Operations & Telemetry | Docker Compose, OpenTelemetry, GitHub Actions, Promptfoo |

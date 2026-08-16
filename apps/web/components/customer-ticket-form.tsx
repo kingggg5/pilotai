@@ -93,22 +93,6 @@ export function CustomerTicketForm({ language, copy, profile, initialMessage = "
       <p className="section-label">{copy.customer.formTitle}</p>
       <h2 id="ticket-form-title">{copy.customer.formIntro}</h2>
       <form onSubmit={submit} noValidate>
-        <fieldset className="handling-modes">
-          <legend>{copy.customer.handlingTitle}</legend>
-          <p>{copy.customer.handlingIntro}</p>
-          <div>
-            {(Object.keys(copy.customer.handlingModes) as HandlingMode[]).map((mode) => {
-              const option = copy.customer.handlingModes[mode];
-              return (
-                <label key={mode} className="handling-option">
-                  <input type="radio" name="handlingMode" value={mode} checked={form.handlingMode === mode} onChange={() => update("handlingMode", mode)} />
-                  <span><strong>{option.title}{mode === "autopilot" ? <em>{copy.customer.recommended}</em> : null}</strong><small>{option.description}</small></span>
-                </label>
-              );
-            })}
-          </div>
-          <small className="handling-boundary">{copy.customer.handlingBoundary}</small>
-        </fieldset>
         <div className="field-grid">
           <label><span>{copy.customer.name}</span><input required readOnly={Boolean(profile)} maxLength={128} autoComplete="name" value={form.customer} onChange={(event) => update("customer", event.target.value)} /></label>
           <label><span>{copy.customer.contact}</span><input required readOnly={Boolean(profile)} maxLength={128} autoComplete="email" value={form.customerId} onChange={(event) => update("customerId", event.target.value)} /></label>

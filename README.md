@@ -36,6 +36,10 @@ The storefront reads product names, prices, source links, and image paths from P
 - Pauses write actions such as `create_escalation` until a human approves them.
 - Exposes REST/OpenAPI as the primary interface with a thin MCP adapter.
 - Records tenant-scoped, PII-redacted, append-only audit events.
+- Features Multi-Model AI Routing: dynamically selects between Google Gemini (`gemini-flash-latest`), OpenAI (`gpt-4o-mini`, `gpt-4o`), and Anthropic (`claude-3-5-haiku`) with live token count and THB cost estimation per ticket.
+- Real-Time Operational KPI Dashboard: tracks Zero-Touch Resolution Rate %, Human-Assisted Rate %, Estimated Hours/Cost Saved in THB, and CSAT sentiment distribution.
+- Live Server-Sent Events (SSE) streaming for real-time AI classification, retrieval evidence, and token generation chunks.
+- Human-in-the-Loop (HITL) Active Learning Feedback loop capturing agent edits and satisfaction ratings for continuous model alignment.
 - Includes JWT verification, signed webhooks, idempotency, Redis rate limiting, health checks, and OpenTelemetry.
 
 ## Architecture
@@ -50,7 +54,7 @@ flowchart LR
     A --> G["Deterministic LangGraph workflow"]
     G --> P[("PostgreSQL + pgvector")]
     A --> R[("Redis")]
-    G --> O["OpenAI, optional"]
+    G --> M["Google Gemini / OpenAI / Local Model"]
     A --> T["OpenTelemetry collector"]
 ```
 
@@ -71,7 +75,7 @@ flowchart TD
     E --> G{"Verified evidence sufficient?"}
     F --> G
     G -->|"No"| H["Abstain and request more information"]
-    G -->|"Yes"| I["Draft answer<br/>Optional generative AI"]
+    G -->|"Yes"| I["Draft answer<br/>Gemini / OpenAI / Local"]
     I --> J["Deterministic policy check"]
     J -->|"Blocked"| K["Refuse safely"]
     J -->|"Read-only"| V{"Selected mode"}
@@ -94,7 +98,7 @@ Green nodes use AI or machine learning. The approval node is a human decision. E
 | --- | --- | --- |
 | Ticket category and urgency | Yes, traditional ML | Local character n-gram Naive Bayes; no external model call |
 | Policy/document retrieval | Optional | PostgreSQL full-text + pgvector; the default hash embedder is local and non-generative, while `EMBEDDING_PROVIDER=openai` enables OpenAI embeddings |
-| Response drafting | Optional generative AI | OpenAI Responses API only when `AI_MODE=openai` and verified evidence exists; `store: false`; local template mode is the default |
+| Response drafting | Optional generative AI | Google Gemini (`gemini-flash-latest` via Google AI Studio Free Tier) or OpenAI Responses API when `AI_MODE=gemini` or `AI_MODE=openai`; local template fallback mode is active by default |
 | LangGraph workflow | No | Typed orchestration, pause/resume, and state transitions only |
 | Policy and security decisions | No | Deterministic rules can refuse unsafe requests or require approval |
 | Order/refund lookup | No | Tenant-scoped, read-only repository calls |
@@ -109,11 +113,12 @@ The selected handling mode is persisted with the ticket and audit trail. It neve
 | --- | --- |
 | Web | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | API | Fastify 5, Zod 4, TypeScript, Node.js 22 |
-| Workflow | One deterministic LangGraph.js graph |
-| AI | OpenAI JavaScript SDK; deterministic local mode for development and tests |
+| Workflow | Deterministic LangGraph.js graph |
+| AI Providers | Google Gemini 3.7 / 1.5 Flash (Free Tier), OpenAI, Anthropic, and Local deterministic fallback |
 | Data | PostgreSQL 17, pgvector, Redis 8 |
 | Gateway | Nginx 1.29 |
 | Operations | Docker Compose, OpenTelemetry, GitHub Actions, Promptfoo |
+
 
 ## Repository layout
 

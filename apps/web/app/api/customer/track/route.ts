@@ -10,6 +10,7 @@ export async function POST(request: Request) {
 		if (typeof body.orderId !== "string" || !body.orderId.trim()) throw new Error("Enter an order number");
 		return NextResponse.json({ ok: true, tracking: await trackCustomerOrder(body.orderId.trim()) });
 	} catch (error) {
-		return NextResponse.json({ ok: false, message: error instanceof Error ? error.message : "Tracking failed" }, { status: 400 });
+		const message = error instanceof Error ? error.message : "Tracking failed";
+		return NextResponse.json({ ok: false, message }, { status: message.includes("Operations API") ? 502 : 400 });
 	}
 }

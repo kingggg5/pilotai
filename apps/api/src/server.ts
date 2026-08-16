@@ -32,6 +32,10 @@ export async function buildServer(container: AppContainer) {
 	app.removeContentTypeParser("application/json");
 	app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
 		const raw = String(body);
+		if (!raw.trim()) {
+			done(null, undefined);
+			return;
+		}
 		rawBodies.set(request, raw);
 		try { done(null, JSON.parse(raw)); } catch (error) { done(error as Error); }
 	});

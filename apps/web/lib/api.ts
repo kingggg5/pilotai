@@ -94,7 +94,7 @@ async function request<T>(path: string, actor: ApiActor, init?: RequestInit): Pr
 		cache: "no-store",
 		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 		headers: {
-			"Content-Type": "application/json",
+			...(init?.body ? { "Content-Type": "application/json" } : {}),
 			...await apiHeaders(actor),
 			...init?.headers,
 		},
@@ -280,8 +280,8 @@ export async function getCustomerTickets() {
 }
 
 export async function trackCustomerOrder(orderId: string): Promise<OrderTracking> {
-	const value = await request<{ order_id: string; status: string; tracking_number?: string; estimated_delivery?: string; updated_at: string }>(`/api/v1/customer/orders/${encodeURIComponent(orderId)}`, "customer");
-	return { orderId: value.order_id, status: value.status, trackingNumber: value.tracking_number, estimatedDelivery: value.estimated_delivery, updatedAt: value.updated_at };
+	const value = await request<{ order_id: string; status: string; subtotal?: number; currency?: "THB"; tracking_number?: string; estimated_delivery?: string; updated_at: string }>(`/api/v1/customer/orders/${encodeURIComponent(orderId)}`, "customer");
+	return { orderId: value.order_id, status: value.status, subtotal: value.subtotal, currency: value.currency, trackingNumber: value.tracking_number, estimatedDelivery: value.estimated_delivery, updatedAt: value.updated_at };
 }
 
 export async function payCustomerOrder(orderId: string): Promise<{ ok: boolean; message: string; order: { id: string; status: string; subtotal: number } }> {
@@ -308,6 +308,7 @@ export async function createTicket(draft: TicketDraft): Promise<TicketWorkItem> 
 			channel: draft.channel,
 			locale: draft.locale,
 			handling_mode: draft.handlingMode,
+			conversation_context: draft.conversationContext,
 			idempotency_key: draft.idempotencyKey,
 			...(draft.subject ? { subject: draft.subject } : {}),
 			...(draft.orderId ? { order_id: draft.orderId } : {}),
@@ -315,6 +316,14 @@ export async function createTicket(draft: TicketDraft): Promise<TicketWorkItem> 
 	});
 	const ticket = toTicket(payload.ticket);
 	return { ticket, run: toRun(payload.run, ticket.id) };
+}
+
+export async function getCustomerChatHistory(): Promise<TicketWorkItem[]> {
+	const payload = await request<{ items: Array<{ ticket: ApiTicket; run: ApiRun }> }>("/api/v1/customer/chat-history", "customer");
+	return payload.items.map((item) => {
+		const ticket = toTicket(item.ticket);
+		return { ticket, run: toRun(item.run, ticket.id) };
+	});
 }
 
 export async function submitDecision(runId: string, decision: Decision, note?: string): Promise<DecisionResponse> {

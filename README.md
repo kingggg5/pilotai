@@ -24,6 +24,14 @@ The admin queue is a shared inbox: new chat tickets appear in the queue, the tra
 
 ![Append-only audit log with operational filters](./docs/images/audit-log.webp)
 
+### Customer live chat and safe payment demo
+
+The customer surface is now a persistent live-chat thread rather than a long form. A signed-in customer can send a message, include an order reference, ask for a human, reopen prior chat turns, and see the AI evidence boundary. The conversation context is capped to the latest eight turns so response latency and prompt size stay predictable.
+
+The order panel includes **Simulate Pay** for local demos. It verifies the server-authoritative order total and marks the demo order as paid; it never moves money or calls a payment network. The API rejects a payment attempt when no verified subtotal is available.
+
+The latest local verification covered registration, authenticated chat, chat history reload, manual handoff, and a successful simulated payment against the running web/API pair. The same customer chat history is available in the staff workspace for review.
+
 ## What the system does
 
 - Supports Thai and English customer journeys with an explicit language switch.
@@ -56,9 +64,47 @@ flowchart LR
     A --> G["Deterministic LangGraph workflow"]
     G --> P[("PostgreSQL + pgvector")]
     A --> R[("Redis")]
-    G --> M["Google Gemini / OpenAI / Local Model"]
+    G --> M["Local / Groq / Gemini / OpenAI"]
     A --> T["OpenTelemetry collector"]
 ```
+
+### System boundaries and trust model
+
+```mermaid
+flowchart TB
+    subgraph Clients["Clients"]
+        Customer["Customer browser\nlive chat · orders"]
+        Staff["Staff browser\nqueue · approvals"]
+    end
+    subgraph Edge["Edge boundary"]
+        Nginx["Nginx\nTLS · headers · routing"]
+        BFF["Next.js BFF\nHttpOnly session · same-origin API"]
+    end
+    subgraph Core["Typed application core"]
+        API["Fastify REST/OpenAPI\nZod contracts · rate limits"]
+        Graph["Explicit LangGraph\nclassify → retrieve → draft → policy → approve → execute"]
+        Policy["Deterministic policy gate\nevidence threshold · side-effect boundary"]
+    end
+    subgraph State["State and evidence"]
+        PG[("PostgreSQL + pgvector\norders · tickets · runs · audit")]
+        Redis[("Redis\nrate limits · ephemeral state")]
+    end
+    subgraph Providers["Provider boundary"]
+        Model["Local default\nor Groq / Gemini / OpenAI"]
+    end
+    Customer --> Nginx
+    Staff --> Nginx
+    Nginx --> BFF --> API
+    API --> Graph --> Policy
+    Graph --> PG
+    API --> PG
+    API --> Redis
+    Graph --> Model
+    Policy -->|"read-only or approved write"| PG
+    Policy -. "blocked / awaiting human" .-> Staff
+```
+
+The browser never talks directly to a model or database. The BFF owns the browser session boundary, the API owns tenant scope and typed contracts, and the graph records evidence, confidence, policy reasons, tool inputs, and approval decisions in the run trace. Provider selection changes drafting only; it cannot authorize a write.
 
 Business rules live in services and the workflow layer, not in route handlers or UI components. Repository interfaces isolate PostgreSQL from domain logic. Filters and parsers are pure functions so they can be tested independently.
 
@@ -115,15 +161,20 @@ The safe development and test default is `AI_MODE=local`: `ts-char-ngram-naive-b
 
 ## Technology stack
 
-| Layer | Technology |
-| --- | --- |
-| Web | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
-| API | Fastify 5, Zod 4, TypeScript, Node.js 22 |
-| Workflow | Deterministic LangGraph.js graph |
-| AI providers | Local deterministic template (default), Groq, OpenAI Responses API, or Google Gemini API; selected by `AI_MODE` |
-| Data | PostgreSQL 17, pgvector, Redis 8 |
-| Gateway | Nginx 1.29 |
-| Operations | Docker Compose, OpenTelemetry, GitHub Actions, Promptfoo |
+| Surface | Choice | Why it is here |
+| --- | --- | --- |
+| Web application | Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 | Server-rendered routes, same-origin BFF, responsive customer/staff workflows |
+| UI quality | Typed component boundaries · semantic controls · reduced-motion CSS | Keyboard-friendly live chat, accessible password reveal, predictable mobile layouts |
+| API | Fastify 5 · Zod 4 · TypeScript · Node.js 22 | Fast request handling with runtime validation and generated OpenAPI contracts |
+| Workflow | LangGraph.js · explicit typed state machine | Durable classify → retrieve → draft → policy → approval → execute sequencing |
+| Retrieval | PostgreSQL full-text search · pgvector · local hash embeddings | Tenant-scoped evidence with deterministic local fallback and page-level citations |
+| AI providers | Local deterministic template (default) · Groq · Gemini · OpenAI Responses API | Provider isolation; free-plan Groq is optional, never required for CI or local safety |
+| Classification | `ts-char-ngram-naive-bayes-v2` | Fast, explainable topic/urgency routing without a paid model call |
+| System of record | PostgreSQL 17 + pgvector | Orders, tickets, workflow runs, evidence, approvals, and append-only audit events |
+| Runtime state | Redis 8 | Distributed rate limiting and ephemeral coordination; not the backup source of truth |
+| Edge | Nginx 1.29 | TLS termination, security headers, and one public container entry point |
+| Observability | OpenTelemetry · structured audit · health probes | Traceable decisions, latency/error visibility, and operational readiness checks |
+| Delivery | Docker Compose · GitHub Actions · Promptfoo · npm scripts | Reproducible local/prod topology, deterministic evaluations, and release gates |
 
 
 ## Repository layout

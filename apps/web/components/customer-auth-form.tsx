@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { postJson } from "@/lib/browser-api";
 import { localizedPath } from "@/lib/customer-return";
+import { PasswordInput } from "@/components/password-input";
 import type { Copy } from "@/lib/i18n";
 import type { Language } from "@/lib/types";
 
@@ -22,6 +23,8 @@ export function CustomerAuthForm({ mode, language, copy, nextPath = "/account" }
 		finally { setPending(false); }
 	}
 	const nextQuery = nextPath === "/account" ? "" : `&next=${encodeURIComponent(nextPath)}`;
+	const showPassword = language === "th" ? "แสดงรหัสผ่าน" : "Show password";
+	const hidePassword = language === "th" ? "ซ่อนรหัสผ่าน" : "Hide password";
 
 	return (
 		<section className="account-auth-card">
@@ -59,13 +62,14 @@ export function CustomerAuthForm({ mode, language, copy, nextPath = "/account" }
 
 				<label>
 					<span>{copy.account.password}</span>
-					<input
+					<PasswordInput
 						name="password"
 						required
-						type="password"
 						minLength={mode === "register" ? 10 : 1}
 						maxLength={128}
 						autoComplete={mode === "register" ? "new-password" : "current-password"}
+						showLabel={showPassword}
+						hideLabel={hidePassword}
 					/>
 					{mode === "register" && <small>{copy.account.passwordHint}</small>}
 				</label>

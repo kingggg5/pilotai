@@ -128,7 +128,7 @@ export function CustomerPortal({ initialProfile, tickets, language, copy }: { in
 									<dd>{tracking.estimatedDelivery || "—"}</dd>
 								</div>
 							</dl>
-							{tracking.status !== "paid" ? (
+							{tracking.status !== "paid" && typeof tracking.subtotal === "number" ? (
 								<div style={{ marginTop: "16px" }}>
 									<button
 										className="primary-button"
@@ -138,7 +138,7 @@ export function CustomerPortal({ initialProfile, tickets, language, copy }: { in
 										{language === "th" ? "สแกนชำระเงินด้วย PromptPay QR" : "Pay via PromptPay QR"}
 									</button>
 								</div>
-							) : null}
+							) : tracking.status !== "paid" ? <p className="form-assurance">{language === "th" ? "ยังไม่พบยอดที่ยืนยันได้ จึงไม่เปิดการจำลองชำระเงิน" : "A verified total is required before payment can be simulated."}</p> : null}
 						</div>
 					)}
 				</section>
@@ -146,7 +146,7 @@ export function CustomerPortal({ initialProfile, tickets, language, copy }: { in
 				{showQrModal && trackedOrderId ? (
 					<PromptPayModal
 						orderId={trackedOrderId}
-						amount={48900}
+					amount={tracking?.subtotal ?? 0}
 						language={language}
 						onPaid={() => {
 							setShowQrModal(false);

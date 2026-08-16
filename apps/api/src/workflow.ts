@@ -12,6 +12,7 @@ import { AutomationService } from "./automation.js";
 const State = new StateSchema({
 	thread_id: z.string(), message: z.string(), customer_id: z.string().nullable().optional(),
 	order_id: z.string().nullable().optional(), metadata: z.record(z.string(), z.unknown()).default({}),
+	conversation_context: z.array(z.object({ role: z.enum(["customer", "assistant"]), content: z.string() })).default([]),
 	locale: z.string().default("auto"), handling_mode: HandlingMode.default("autopilot"), classification: ClassificationResult.optional(),
 	retrieval: RetrievalResult.optional(), draft: z.string().optional(), policy: PolicyDecision.optional(),
 	entities: ExtractedEntities.optional(), automation: AutomationResult.optional(),
@@ -85,7 +86,7 @@ export class AssistanceWorkflow {
 			const thai = state.entities!.language === "th";
 			return { draft: thai ? "ยังไม่พบหลักฐานที่ตรวจสอบได้เพียงพอ จึงขอไม่คาดเดาคำตอบ กรุณาระบุเลขคำสั่งซื้อหรือส่งเรื่องให้เจ้าหน้าที่ตรวจสอบ" : "I do not have enough verified evidence to answer safely. Please provide the order reference or route this ticket to a specialist." };
 		}
-		return { draft: await this.languageModel.draft({ message: state.message, customerId: state.customer_id ?? null, orderId: state.order_id ?? null, classification: state.classification!, evidence: state.retrieval!.documents }) };
+		return { draft: await this.languageModel.draft({ message: state.message, customerId: state.customer_id ?? null, orderId: state.order_id ?? null, conversation: state.conversation_context, classification: state.classification!, evidence: state.retrieval!.documents }) };
 	}
 
 	private async checkPolicy(state: TicketState) { return { policy: this.policy.evaluate(state.message, state.classification!, state.retrieval!) }; }
@@ -119,7 +120,7 @@ export class AssistanceWorkflow {
 	}
 
 	async start(request: AssistRequest, tenantId = "tenant-local", threadId: string = randomUUID()) {
-		const result = await this.graph.invoke({ thread_id: threadId, message: request.message, customer_id: request.customer_id, order_id: request.order_id, metadata: request.metadata ?? {}, locale: request.locale ?? "auto", handling_mode: request.handling_mode ?? "autopilot" }, this.config(threadId, tenantId));
+		const result = await this.graph.invoke({ thread_id: threadId, message: request.message, customer_id: request.customer_id, order_id: request.order_id, metadata: request.metadata ?? {}, conversation_context: request.conversation_context ?? [], locale: request.locale ?? "auto", handling_mode: request.handling_mode ?? "autopilot" }, this.config(threadId, tenantId));
 		return this.response(result as TicketState & Record<string, unknown>, tenantId);
 	}
 

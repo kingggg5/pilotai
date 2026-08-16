@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { AuditActions } from "../audit.js";
 import type { AppContainer } from "../container.js";
-import { AnalyticsKPI, KnowledgeDocumentUpsert, TicketCreateRequest, TicketFeedbackRequest, TicketSummary, TicketUpdateRequest, type AssistResponse, type TicketListFilters, type TicketWorkItem } from "../domain.js";
+import { AnalyticsKPI, AssistResponse, KnowledgeDocumentUpsert, TicketCreateRequest, TicketFeedbackRequest, TicketSummary, TicketUpdateRequest, type TicketListFilters, type TicketWorkItem } from "../domain.js";
 import { requireRole } from "../security.js";
 import { routeContext } from "./context.js";
 import { QueueQuery, TicketParams } from "./schemas.js";
@@ -83,7 +83,7 @@ export async function registerOperationsRoutes(app: FastifyInstance, container: 
 				}
 			}
 		}
-		const run = await container.workflow.start({ message: input.message, customer_id: input.customer_id, order_id: input.order_id, locale: input.locale, handling_mode: input.handling_mode, metadata: { tenant_id: actor.tenant_id, actor_id: actor.subject, roles: actor.roles, channel: input.channel } }, actor.tenant_id);
+		const run = await container.workflow.start({ message: input.message, customer_id: input.customer_id, order_id: input.order_id, conversation_context: input.conversation_context, locale: input.locale, handling_mode: input.handling_mode, metadata: { tenant_id: actor.tenant_id, actor_id: actor.subject, roles: actor.roles, channel: input.channel } }, actor.tenant_id);
 		container.metrics.record(run.status);
 		container.metrics.recordAutomation(run.automation.mode, run.automation.handling_mode);
 		const item = workItem(input, run);
@@ -101,6 +101,16 @@ export async function registerOperationsRoutes(app: FastifyInstance, container: 
 	api.get("/api/v1/tickets", { preHandler: authenticate, schema: { tags: ["operations"], response: { 200: z.object({ items: z.array(TicketSummary) }) } } }, async (request) => {
 		const actor = principal(request); requireRole(actor, ["agent", "supervisor"], "Agent role required");
 		return { items: (await container.tickets.listPage(actor.tenant_id, 100, 0)).items };
+	});
+	api.get("/api/v1/customer/chat-history", { preHandler: authenticate, schema: { tags: ["customer"], response: { 200: z.object({ items: z.array(z.object({ ticket: TicketSummary, run: AssistResponse })) }) } } }, async (request) => {
+		const actor = principal(request);
+		requireRole(actor, ["customer"], "Customer role required");
+		const page = await container.tickets.listPage(actor.tenant_id, 30, 0, { customerId: actor.subject, channel: "chat", sort: "oldest" });
+		const runs = await container.runs.getMany(page.items.flatMap((ticket) => ticket.run_id ? [ticket.run_id] : []), actor.tenant_id);
+		return { items: page.items.flatMap((ticket) => {
+			const run = ticket.run_id ? runs.get(ticket.run_id) : undefined;
+			return run ? [{ ticket, run }] : [];
+		}) };
 	});
 	api.get("/api/v1/ticket-queue", { preHandler: authenticate, schema: { tags: ["operations"], querystring: QueueQuery, response: { 200: z.any() } } }, async (request) => {
 		const actor = principal(request); requireRole(actor, ["agent", "supervisor"], "Agent role required");

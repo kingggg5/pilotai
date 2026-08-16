@@ -11,10 +11,12 @@ const draft = parseTicketDraft({
 	channel: "web",
 	locale: "en",
 	handlingMode: "autopilot",
+	conversationContext: [{ role: "customer", content: "I placed an order yesterday." }, { role: "assistant", content: "I can help check its status." }],
 	idempotencyKey: "request-12345678",
 });
 assert.equal(draft?.idempotencyKey, "request-12345678");
 assert.equal(draft?.handlingMode, "autopilot");
+assert.deepEqual(draft?.conversationContext, [{ role: "customer", content: "I placed an order yesterday." }, { role: "assistant", content: "I can help check its status." }]);
 
 assert.equal(parseTicketDraft({ message: "Help", customer: "A", customerId: "B" }), null);
 assert.equal(parseDecision({ runId: "run", decision: "approve", note: "x".repeat(2_001) }), null);

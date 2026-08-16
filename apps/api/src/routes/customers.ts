@@ -210,7 +210,7 @@ export async function registerCustomerRoutes(app: FastifyInstance, container: Ap
 		}
 		const ownOrder = await container.orders.get(request.params.orderId, actor.tenant_id);
 		const result = ownOrder
-			? { order_id: ownOrder.id, status: ownOrder.status, tracking_number: ownOrder.tracking_number ?? null, estimated_delivery: ownOrder.estimated_delivery ?? null, updated_at: ownOrder.updated_at }
+			? { order_id: ownOrder.id, status: ownOrder.status, subtotal: ownOrder.subtotal, currency: ownOrder.currency, tracking_number: ownOrder.tracking_number ?? null, estimated_delivery: ownOrder.estimated_delivery ?? null, updated_at: ownOrder.updated_at }
 			: await container.tools.getOrderStatus(request.params.orderId, actor.tenant_id);
 		await container.audit.fromRequest(request, actor, { action: AuditActions.orderRead, resourceType: "order", resourceId: request.params.orderId, metadata: { status: result.status } });
 		return result;

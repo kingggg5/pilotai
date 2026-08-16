@@ -10,10 +10,15 @@ type ChatMessage = {
 	id: string;
 	role: "assistant" | "user";
 	text: string;
+	createdAt?: string;
 	pending?: boolean;
 	error?: boolean;
 	item?: TicketWorkItem;
+	retryText?: string;
+	retryMode?: HandlingMode;
 };
+
+const MAX_CONTEXT_TURNS = 8;
 
 function orderIdFrom(text: string) {
 	const match = text.match(/\b(?:ORD|ORDER|SO)[-\s]?[A-Z0-9]{4,}\b/i);
@@ -42,10 +47,30 @@ function messageText(item: TicketWorkItem, copy: Copy) {
 	return item.run.draft && item.run.draft !== status ? `${status}\n\n${item.run.draft}` : status;
 }
 
-export function LiveSupportChat({ language, copy, profile, initialMessage = "" }: { language: Language; copy: Copy; profile?: { name: string; email: string }; initialMessage?: string }) {
+function historyMessages(history: TicketWorkItem[], copy: Copy): ChatMessage[] {
+	return history.flatMap((item) => [
+		{ id: `${item.ticket.id}-customer`, role: "user" as const, text: item.ticket.summary, createdAt: item.ticket.createdAt },
+		{ id: `${item.ticket.id}-assistant`, role: "assistant" as const, text: messageText(item, copy), createdAt: item.ticket.updatedAt, item },
+	]);
+}
+
+function conversationContext(messages: ChatMessage[]) {
+	return messages
+		.filter((message) => message.id !== "welcome" && !message.pending && !message.error)
+		.slice(-MAX_CONTEXT_TURNS)
+		.map((message) => ({
+			role: message.role === "user" ? "customer" as const : "assistant" as const,
+			content: (message.item?.run.draft ?? message.text).slice(0, 1_600),
+		}));
+}
+
+export function LiveSupportChat({ language, copy, profile, history = [], initialMessage = "" }: { language: Language; copy: Copy; profile?: { name: string; email: string }; history?: TicketWorkItem[]; initialMessage?: string }) {
+	const [archivedHistory, setArchivedHistory] = useState(history);
+	const archive = historyMessages(archivedHistory, copy);
 	const [draft, setDraft] = useState(initialMessage);
 	const [messages, setMessages] = useState<ChatMessage[]>([{ id: "welcome", role: "assistant", text: copy.customer.chatGreeting }]);
 	const [pending, setPending] = useState(false);
+	const [showHistory, setShowHistory] = useState(false);
 	const [error, setError] = useState("");
 	const idempotencyKey = useRef(crypto.randomUUID());
 	const logRef = useRef<HTMLDivElement>(null);
@@ -53,9 +78,9 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 	useEffect(() => {
 		const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 		logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior });
-	}, [messages, pending]);
+	}, [messages, pending, showHistory]);
 
-	async function sendMessage(value: string, handlingMode?: HandlingMode) {
+	async function sendMessage(value: string, handlingMode?: HandlingMode, appendUserMessage = true) {
 		if (pending) return;
 		const text = value.trim();
 		if (text.length < 3) {
@@ -63,9 +88,10 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 			return;
 		}
 
-		const userMessage: ChatMessage = { id: crypto.randomUUID(), role: "user", text };
+		const userMessage: ChatMessage = { id: crypto.randomUUID(), role: "user", text, createdAt: new Date().toISOString() };
 		const pendingId = crypto.randomUUID();
-		setMessages((current) => [...current, userMessage, { id: pendingId, role: "assistant", text: copy.customer.chatTyping, pending: true }]);
+		const context = conversationContext([...archive, ...messages, ...(appendUserMessage ? [userMessage] : [])]);
+		setMessages((current) => [...current, ...(appendUserMessage ? [userMessage] : []), { id: pendingId, role: "assistant", text: copy.customer.chatTyping, pending: true }]);
 		setDraft("");
 		setError("");
 		setPending(true);
@@ -79,15 +105,16 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 				channel: "chat",
 				locale: language,
 				handlingMode: handlingMode || (requestsStaff(text) ? "manual" : "autopilot"),
+				conversationContext: context,
 				idempotencyKey: idempotencyKey.current,
 			});
 			if (!item.item) throw new Error(copy.customer.failed);
 
-			setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, pending: false, text: messageText(item.item!, copy), item: item.item } : message));
+			setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, pending: false, text: messageText(item.item!, copy), createdAt: new Date().toISOString(), item: item.item } : message));
 			idempotencyKey.current = crypto.randomUUID();
-		} catch {
-			const message = copy.customer.failed;
-			setMessages((current) => current.map((item) => item.id === pendingId ? { ...item, pending: false, error: true, text: message } : item));
+		} catch (reason) {
+			const message = reason instanceof Error && reason.message ? reason.message : copy.customer.failed;
+			setMessages((current) => current.map((item) => item.id === pendingId ? { ...item, pending: false, error: true, text: message, retryText: text, retryMode: handlingMode } : item));
 			setError(message);
 		} finally {
 			setPending(false);
@@ -99,16 +126,27 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 		void sendMessage(draft);
 	}
 
-	function quickReply(text: string, handlingMode?: HandlingMode) {
-		void sendMessage(text, handlingMode);
+	function retry(message: ChatMessage) {
+		if (!message.retryText) return;
+		setMessages((current) => current.filter((item) => item.id !== message.id));
+		void sendMessage(message.retryText, message.retryMode, false);
 	}
 
 	function reset() {
+		setArchivedHistory((current) => {
+			const known = new Set(current.map((item) => item.ticket.id));
+			const completed = messages.flatMap((message) => message.item && !known.has(message.item.ticket.id) ? [message.item] : []);
+			return [...current, ...completed];
+		});
 		setMessages([{ id: "welcome", role: "assistant", text: copy.customer.chatGreeting }]);
 		setDraft("");
 		setError("");
+		setShowHistory(false);
 		idempotencyKey.current = crypto.randomUUID();
 	}
+
+	const historyLabel = language === "th" ? `ดูประวัติการสนทนา (${archivedHistory.length})` : `View conversation history (${archivedHistory.length})`;
+	const hideHistoryLabel = language === "th" ? "ซ่อนประวัติการสนทนา" : "Hide conversation history";
 
 	return (
 		<section className="conversation-card chat-card" aria-labelledby="chat-title">
@@ -117,12 +155,14 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 				<span className="chat-status"><i />{language === "th" ? "AI พร้อมช่วย" : "AI is ready"}</span>
 			</header>
 			<div ref={logRef} className="chat-log" role="log" aria-live="polite" aria-relevant="additions" aria-busy={pending} aria-label={copy.customer.chatTitle}>
-				{messages.map((message) => <ChatMessageView key={message.id} message={message} copy={copy} />)}
+				{archivedHistory.length ? <button className="chat-history-toggle" type="button" aria-expanded={showHistory} onClick={() => setShowHistory((value) => !value)}>{showHistory ? hideHistoryLabel : historyLabel}</button> : null}
+				{showHistory ? archive.map((message) => <ChatMessageView key={message.id} message={message} copy={copy} language={language} />) : null}
+				{messages.map((message) => <ChatMessageView key={message.id} message={message} copy={copy} language={language} onRetry={() => retry(message)} />)}
 			</div>
 			<div className="chat-quick-actions" aria-label={language === "th" ? "ตัวเลือกด่วน" : "Quick actions"}>
-				<button type="button" disabled={pending} onClick={() => quickReply(language === "th" ? "ช่วยตรวจสอบสถานะคำสั่งซื้อให้หน่อยครับ" : "Please check my order status.")}>{copy.customer.chatOrder}</button>
-				<button type="button" disabled={pending} onClick={() => quickReply(language === "th" ? "พบปัญหากับคำสั่งซื้อหรือการชำระเงินครับ" : "I have an issue with my order or payment.")}>{copy.customer.chatIssue}</button>
-				<button type="button" disabled={pending} onClick={() => quickReply(language === "th" ? "ต้องการคุยกับเจ้าหน้าที่ครับ" : "I would like to talk to a specialist.", "manual")}>{copy.customer.chatStaff}</button>
+				<button type="button" disabled={pending} onClick={() => void sendMessage(language === "th" ? "ช่วยตรวจสอบสถานะคำสั่งซื้อให้หน่อยครับ" : "Please check my order status.")}>{copy.customer.chatOrder}</button>
+				<button type="button" disabled={pending} onClick={() => void sendMessage(language === "th" ? "พบปัญหากับคำสั่งซื้อหรือการชำระเงินครับ" : "I have an issue with my order or payment.")}>{copy.customer.chatIssue}</button>
+				<button type="button" disabled={pending} onClick={() => void sendMessage(language === "th" ? "ต้องการคุยกับเจ้าหน้าที่ครับ" : "I would like to talk to a specialist.", "manual")}>{copy.customer.chatStaff}</button>
 			</div>
 			<form className="chat-composer" onSubmit={submit} noValidate>
 				<label className="sr-only" htmlFor="support-message">{copy.customer.message}</label>
@@ -135,13 +175,16 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 	);
 }
 
-function ChatMessageView({ message, copy }: { message: ChatMessage; copy: Copy }) {
+function ChatMessageView({ message, copy, language, onRetry }: { message: ChatMessage; copy: Copy; language: Language; onRetry?: () => void }) {
+	const timestamp = message.createdAt ? new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }).format(new Date(message.createdAt)) : null;
 	return (
 		<div className={`chat-message chat-message-${message.role}`}>
-			<div className="chat-avatar" aria-hidden="true">{message.role === "assistant" ? "✳" : "คุณ"}</div>
+			<div className="chat-avatar" aria-hidden="true">{message.role === "assistant" ? "✳" : language === "th" ? "คุณ" : "You"}</div>
 			<article className={`chat-bubble${message.error ? " chat-bubble-error" : ""}`}>
 				<p>{message.text}</p>
 				{message.pending ? <span className="chat-typing" aria-hidden="true"><i /><i /><i /></span> : null}
+				{timestamp ? <time className="chat-message-time" dateTime={message.createdAt}>{timestamp}</time> : null}
+				{message.error && message.retryText ? <button className="chat-retry" type="button" onClick={onRetry}>{language === "th" ? "ส่งอีกครั้ง" : "Try again"}</button> : null}
 				{message.item ? <ChatTicketStatus item={message.item} copy={copy} /> : null}
 			</article>
 		</div>

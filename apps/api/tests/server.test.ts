@@ -119,4 +119,13 @@ test("purchase request prices on the server, creates an order, and joins the AI 
 	assert.equal(retry.json().replay, true);
 	const order = await app.inject({ method: "GET", url: `/api/v1/customer/orders/${response.json().order.id}`, headers: actor });
 	assert.equal(order.json().status, "pending_review");
+	assert.equal(order.json().subtotal, 97_800);
+	const payment = await app.inject({ method: "POST", url: `/api/v1/customer/orders/${response.json().order.id}/pay`, headers: { ...actor, "content-type": "application/json" }, payload: "" });
+	assert.equal(payment.statusCode, 200);
+	assert.equal(payment.json().order.status, "paid");
+	const chat = await app.inject({ method: "POST", url: "/api/v1/tickets", headers: actor, payload: { message: "Can I return an unopened product?", customer: "Buyer", channel: "chat", locale: "en", handling_mode: "copilot", conversation_context: [{ role: "customer", content: "I bought an item yesterday." }], idempotency_key: "chat-history-001" } });
+	assert.equal(chat.statusCode, 201);
+	const history = await app.inject({ method: "GET", url: "/api/v1/customer/chat-history", headers: actor });
+	assert.equal(history.statusCode, 200);
+	assert.equal(history.json().items[0].ticket.id, chat.json().ticket.id);
 });

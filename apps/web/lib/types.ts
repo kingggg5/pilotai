@@ -110,6 +110,8 @@ export interface CustomerProfile {
 export interface OrderTracking {
 	orderId: string;
 	status: string;
+	subtotal?: number;
+	currency?: "THB";
 	trackingNumber?: string;
 	estimatedDelivery?: string;
 	updatedAt: string;
@@ -150,6 +152,7 @@ export interface TicketDraft {
 	channel: "email" | "chat" | "web";
 	locale: "auto" | "th" | "en";
 	handlingMode: HandlingMode;
+	conversationContext?: Array<{ role: "customer" | "assistant"; content: string }>;
 	idempotencyKey: string;
 }
 
@@ -209,4 +212,3 @@ export interface TicketFeedbackInput {
 	editedReply?: string;
 	notes?: string;
 }
-

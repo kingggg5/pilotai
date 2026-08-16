@@ -263,6 +263,9 @@ a { color: inherit; text-decoration: none; }
 .chat-message-user .chat-bubble { color: var(--black); background: var(--lime); border-radius: 16px 16px 4px 16px; }
 .chat-bubble p { margin: 0; line-height: 1.55; white-space: pre-wrap; }
 .chat-bubble-error { color: var(--paper); background: var(--danger); }
+.chat-message-time { display: block; margin-top: 9px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.chat-retry { min-height: 34px; margin-top: 10px; padding: 0 12px; border: 1px solid currentColor; border-radius: 999px; color: inherit; background: transparent; font-size: var(--text-label); font-weight: 900; }
+.chat-retry:hover { color: var(--black); background: var(--paper); }
 .chat-typing { display: inline-flex; gap: 4px; margin-top: 10px; }
 .chat-typing i { width: 6px; height: 6px; display: block; border-radius: 50%; background: currentColor; animation: chat-pulse 1s infinite ease-in-out; }
 .chat-typing i:nth-child(2) { animation-delay: 120ms; }.chat-typing i:nth-child(3) { animation-delay: 240ms; }
@@ -274,6 +277,8 @@ a { color: inherit; text-decoration: none; }
 .chat-ticket-status dt { color: var(--muted); font-size: var(--text-label); }.chat-ticket-status dd { overflow-wrap: anywhere; margin: 3px 0 0; font-size: var(--text-label); font-weight: 900; }
 .chat-ticket-status > small { display: block; margin-top: 12px; color: var(--muted); line-height: 1.45; }
 .chat-quick-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px 0; }
+.chat-history-toggle { width: fit-content; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-dark); border-radius: 999px; color: var(--muted-light); background: var(--raised); font-size: var(--text-label); font-weight: 800; }
+.chat-history-toggle:hover { color: var(--black); border-color: var(--lime); background: var(--lime); }
 .chat-quick-actions button { min-height: 40px; padding: 0 12px; border: 1px solid var(--line-deep); border-radius: 999px; color: var(--muted-light); background: transparent; font-size: var(--text-label); font-weight: 800; }
 .chat-quick-actions button:hover:not(:disabled) { color: var(--black); background: var(--lime); border-color: var(--lime); }
 .chat-composer { padding: 14px 18px 12px; }
@@ -287,6 +292,11 @@ a { color: inherit; text-decoration: none; }
 label { display: grid; gap: 8px; color: var(--paper-strong); font-size: var(--text-body); font-weight: 700; }
 input, textarea, select { width: 100%; border: 1px solid var(--field); border-radius: var(--control); color: var(--paper); background: var(--raised); transition: border-color 140ms ease, background 140ms ease; }
 input { min-height: 48px; padding: 0 14px; }
+.password-control { position: relative; width: 100%; }
+.password-control input { padding-right: 54px; }
+.password-visibility { position: absolute; top: 50%; right: 7px; width: 40px; height: 40px; display: grid; place-items: center; transform: translateY(-50%); border: 0; border-radius: 10px; color: var(--muted-light); background: transparent; }
+.password-visibility:hover, .password-visibility[aria-pressed="true"] { color: var(--black); background: var(--lime); }
+.password-visibility svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 textarea { min-height: 132px; padding: 14px; resize: vertical; line-height: 1.55; }
 input:hover, textarea:hover, select:hover, input:focus, textarea:focus, select:focus { border-color: var(--lime); background: #32322f; }
 input:read-only { color: var(--muted-light); cursor: not-allowed; }

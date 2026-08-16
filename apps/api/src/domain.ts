@@ -124,6 +124,7 @@ export type ApprovalRecord = z.infer<typeof ApprovalRecord>;
 export const AssistRequest = z.object({
 	message: z.string().trim().min(3).max(8_000), customer_id: z.string().max(128).nullable().optional(),
 	order_id: z.string().max(128).nullable().optional(), metadata: z.record(z.string(), z.unknown()).default({}),
+	conversation_context: z.array(z.object({ role: z.enum(["customer", "assistant"]), content: z.string().trim().min(1).max(1_600) })).max(8).default([]),
 	locale: Locale.default("auto"), handling_mode: HandlingMode.default("autopilot"),
 });
 export type AssistRequest = z.input<typeof AssistRequest>;
@@ -159,6 +160,7 @@ export const TicketCreateRequest = z.object({
 	message: z.string().trim().min(3).max(8_000), subject: z.string().max(240).nullable().optional(),
 	customer: z.string().trim().min(1).max(240).default("Customer"), customer_id: z.string().max(128).nullable().optional(),
 	order_id: z.string().max(128).nullable().optional(), channel: z.enum(["email", "chat", "web"]).default("web"),
+	conversation_context: z.array(z.object({ role: z.enum(["customer", "assistant"]), content: z.string().trim().min(1).max(1_600) })).max(8).default([]),
 	locale: Locale.default("auto"), handling_mode: HandlingMode.default("autopilot"),
 	idempotency_key: z.string().min(8).max(128).nullable().optional(),
 });
@@ -277,4 +279,3 @@ export const AnalyticsKPI = z.object({
 	}),
 });
 export type AnalyticsKPI = z.infer<typeof AnalyticsKPI>;
-

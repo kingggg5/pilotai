@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { postJson } from "@/lib/browser-api";
+import { PasswordInput } from "@/components/password-input";
 import type { Copy } from "@/lib/i18n";
 import type { Language } from "@/lib/types";
 
@@ -36,7 +37,7 @@ export function AdminLogin({ copy, language, configured }: { copy: Copy; languag
 				<p>{configured ? copy.login.subtitle : copy.login.unavailable}</p>
 				{configured ? (
 					<form onSubmit={submit}>
-						<label><span>{copy.login.password}</span><input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+						<label><span>{copy.login.password}</span><PasswordInput autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} showLabel={language === "th" ? "แสดงรหัสผ่าน" : "Show password"} hideLabel={language === "th" ? "ซ่อนรหัสผ่าน" : "Hide password"} /></label>
 						{error ? <p className="form-error" role="alert">{error}</p> : null}
 						<button className="primary-button" disabled={pending} type="submit">{pending ? copy.login.submitting : copy.login.submit}</button>
 					</form>

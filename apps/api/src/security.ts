@@ -12,9 +12,15 @@ function unauthorized(message = "Bearer token required") {
 
 export async function principalFor(request: FastifyRequest, settings: Settings): Promise<Principal> {
   if (settings.AUTH_MODE === "local") {
-    const actor = String(request.headers["x-actor-id"] ?? "local-agent");
-    const tenant = String(request.headers["x-tenant-id"] ?? "tenant-local");
-    const roles = actor.startsWith("cus_") ? ["customer", "ticket:create"] : ["agent", "approver", "audit:read", "ticket:create"];
+    const actor = String(request.headers["x-actor-id"] ?? request.headers["x-servicepilot-subject"] ?? "local-agent");
+    const tenant = String(request.headers["x-tenant-id"] ?? request.headers["x-servicepilot-tenant"] ?? "tenant-local");
+    const headerRole = request.headers["x-servicepilot-role"] ?? request.headers["x-role"];
+    const isCustomer = headerRole === "customer" || actor.startsWith("cus_") || actor.includes("@");
+    const roles = headerRole
+      ? [String(headerRole), "ticket:create"]
+      : (isCustomer
+          ? ["customer", "ticket:create"]
+          : ["agent", "approver", "supervisor", "audit:read", "ticket:create"]);
     return { subject: actor, tenant_id: tenant, roles, auth_mode: "local" };
   }
   const authorization = request.headers.authorization;

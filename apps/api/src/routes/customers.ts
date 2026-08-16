@@ -86,6 +86,7 @@ export async function registerCustomerRoutes(app: FastifyInstance, container: Ap
     const actor = principal(request); requireRole(actor, ["customer"], "Customer role required");
     let account = await container.customers.get(actor.subject, actor.tenant_id);
     if (!account) {
+      const now = new Date().toISOString();
       const email = actor.subject.includes("@") ? actor.subject : `${actor.subject}@example.com`;
       const name = actor.subject.includes("@") ? (actor.subject.split("@")[0] || "Customer") : actor.subject;
       account = {
@@ -93,9 +94,14 @@ export async function registerCustomerRoutes(app: FastifyInstance, container: Ap
         name,
         email,
         phone: "081-234-5678",
-        created_at: new Date().toISOString(),
+        created_at: now,
       };
-      await container.customers.save(account, actor.tenant_id);
+      await container.customers.create({
+        ...account,
+        tenant_id: actor.tenant_id,
+        password_hash: "local-bypass",
+        updated_at: now,
+      });
     }
     const idempotencyKey = request.body.idempotency_key ?? null;
     if (idempotencyKey) {

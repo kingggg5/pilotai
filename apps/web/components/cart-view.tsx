@@ -81,10 +81,25 @@ export function CartView({ language, copy, signedIn, products }: { language: Lan
         <div className="cart-heading"><div><h1 id="cart-title">{copy.commerce.cartTitle}</h1><p>{copy.commerce.cartSubtitle}</p></div><span>{itemCount} {itemCount === 1 ? copy.commerce.item : copy.commerce.items}</span></div>
         {lines.map(({ product, quantity }) => (
           <article className="cart-line" key={product.id}>
-            <div className="cart-product-mark"><Image src={product.imageUrl} alt={`${product.name} ${product.variant}`} width={160} height={120} sizes="160px" /></div>
-            <div className="cart-product-copy"><h2>{product.name}</h2><p>{product.variant}</p><strong>{formatThb(product.priceThb, language)}</strong></div>
-            <label><span>{copy.commerce.quantity}</span><select value={quantity} onChange={(event) => { setCartQuantity(product.id, Number(event.target.value)); setNotice({ tone: "success", message: copy.commerce.cartUpdated }); }}>{Array.from({ length: 10 }, (_, index) => index + 1).map((value) => <option key={value}>{value}</option>)}</select></label>
-            <button className="remove-button" type="button" onClick={() => { setCartQuantity(product.id, 0); setNotice({ tone: "success", message: copy.commerce.itemRemoved }); }}>{copy.commerce.remove}</button>
+            <div className="cart-product-mark">
+              <Image src={product.imageUrl} alt={`${product.name} ${product.variant}`} width={160} height={120} sizes="160px" />
+            </div>
+            <div className="cart-product-copy">
+              <h2>{product.name}</h2>
+              <p>{product.variant}</p>
+              <strong>{formatThb(product.priceThb, language)}</strong>
+            </div>
+            <div className="cart-controls-group">
+              <label className="cart-qty-label">
+                <span>{copy.commerce.quantity}</span>
+                <select value={quantity} onChange={(event) => { setCartQuantity(product.id, Number(event.target.value)); setNotice({ tone: "success", message: copy.commerce.cartUpdated }); }}>
+                  {Array.from({ length: 10 }, (_, index) => index + 1).map((value) => <option key={value}>{value}</option>)}
+                </select>
+              </label>
+              <button className="remove-button" type="button" onClick={() => { setCartQuantity(product.id, 0); setNotice({ tone: "success", message: copy.commerce.itemRemoved }); }}>
+                {copy.commerce.remove}
+              </button>
+            </div>
           </article>
         ))}
         <div className="cart-list-actions">

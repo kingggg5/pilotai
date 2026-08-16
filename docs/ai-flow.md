@@ -30,7 +30,16 @@ sequenceDiagram
     Graph->>Data: Read order/refund or retrieve authorized policy pages
     Data-->>Graph: Live record or ranked evidence with citations
 
-    alt Evidence is below threshold
+    alt General, non-business question
+        Graph->>Graph: Skip company retrieval; mark general-conversation-v1
+        alt AI_MODE is openai or groq or gemini
+            Graph->>LLM: General question and bounded safety instructions
+            LLM-->>Graph: Natural answer or useful clarification
+        else AI_MODE is local
+            Graph->>Graph: Use deterministic conversational response
+        end
+        Graph-->>Customer: Informational answer; no human queue or side effect
+    else Evidence is below threshold
         Graph-->>Customer: Abstain and request missing information
     else Evidence is sufficient
         alt AI_MODE is openai
@@ -81,9 +90,9 @@ Embeddings rank candidate evidence. They do not grant document access: tenant an
 
 ### 3. Generative response drafting
 
-When `AI_MODE=openai`, `OpenAILanguageModel` calls the OpenAI Responses API only after verified evidence exists. The request contains the ticket, predicted category/priority, and retrieved evidence. The call uses `store: false`, and the model is instructed to use only supplied evidence and attach page-level citations.
+When `AI_MODE=openai`, `OpenAILanguageModel` calls the OpenAI Responses API after classification. Business questions are sent only with verified evidence; clearly general, non-business questions use a separate bounded prompt that permits broad knowledge but forbids claims about company policy, orders, payments, customer data, private facts, or completed actions. The call uses `store: false`.
 
-The model returns a draft. It does not execute tools, change orders, create escalations, approve refunds, decide access, or write audit records. If `AI_MODE=local`, ServicePilot uses a deterministic template instead. Optional fallback can return that template when the provider fails.
+The model returns a draft. It does not execute tools, change orders, create escalations, approve refunds, decide access, or write audit records. If `AI_MODE=local`, ServicePilot uses deterministic templates for grounded business answers and conversational responses for general questions. Optional fallback can return those templates when the provider fails.
 
 ## Components that are not AI
 
@@ -103,7 +112,7 @@ LangGraph is an orchestration library in this system, not an autonomous agent or
 
 ## Safety contract
 
-1. No evidence means no generated factual answer.
+1. Business or customer-specific facts require authorized evidence; general-knowledge questions may use a separate bounded knowledge prompt.
 2. The model receives only evidence already authorized for the tenant and role.
 3. Model output is a draft, never an authorization decision.
 4. Read-only tools and low-risk internal ticket routing/status updates may run automatically.

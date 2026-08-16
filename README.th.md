@@ -22,6 +22,7 @@ ServicePilot AI คือแพลตฟอร์มบริการลูก�
 - จำแนกประเภทและระดับความเร่งด่วนของ Ticket ด้วยโมเดล Naive Bayes (Character n-gram) ภายในเครื่อง
 - ค้นหาข้อมูลนโยบายอ้างอิงด้วย PostgreSQL Full-text Search, pgvector และ Reranking
 - แสดงแหล่งอ้างอิงระดับหน้า (Page-level Citations) และปฏิเสธการแต่งข้อมูลเมื่อหลักฐานไม่เพียงพอ
+- ตอบคำถามทั่วไป เช่น คำทักทาย ความสามารถของระบบ และความรู้ทั่วไป โดยไม่ส่งเข้าคิวเจ้าหน้าที่; เรื่อง Order, การเงิน, ลูกค้า และข้อมูลส่วนตัวยังคงต้องมีหลักฐานที่ยืนยันได้
 - เรียกใช้งาน Read-only Tools อัตโนมัติ: `get_order_status`, `check_refund_status` และ `search_policy`
 - ลูกค้าสามารถเลือกรูปแบบการประมวลผลได้ต่อ Ticket: เจ้าหน้าที่เท่านั้น (Staff Only), ผู้ช่วย AI (Copilot), หรือ AI อัตโนมัติ (Autopilot)
 - ดึงหมายเลขอ้างอิง สอบถามข้อมูลที่ขาดหาย มอบหมายทีมงาน กำหนดลำดับความสำคัญ และปิดเคสความเสี่ยงต่ำที่ยืนยันแล้วอัตโนมัติ
@@ -55,6 +56,8 @@ flowchart LR
 ### โมเดลที่ใช้ตอบแชตในแต่ละโหมด
 
 ค่าเริ่มต้นสำหรับ development และ test คือ `AI_MODE=local`: `ts-char-ngram-naive-bayes-v2` ใช้จำแนกหัวข้อ/ความเร่งด่วน, `LocalLanguageModel` ใช้สร้างร่างคำตอบแบบ grounded และ `hash-char-gram-v2` ใช้ทำ embedding ภายในเครื่อง หากตั้ง `AI_MODE=groq` จะใช้ `GROQ_MODEL` (ค่าเริ่มต้น `llama-3.1-8b-instant`), `AI_MODE=openai` จะใช้ `OPENAI_MODEL` (ค่าเริ่มต้น `gpt-5.6-luna`) หรือ `AI_MODE=gemini` จะใช้ `GEMINI_MODEL` (ค่าเริ่มต้น `gemini-flash-latest`) โดย production รองรับ OpenAI หรือ Groq และทุก write action ยังต้องผ่าน Policy และการอนุมัติจากมนุษย์
+
+คำถามทั่วไปจะใช้เส้นทาง `general-conversation-v1` แยกจากข้อมูลบริษัท: Provider ภายนอกสามารถตอบความรู้ทั่วไปได้อย่างเป็นธรรมชาติ ส่วนโหมด local ใช้คำตอบ deterministic ที่ไม่เดาข้อมูลสดหรือข้อมูลเฉพาะเรื่อง และจะถามบริบทเพิ่มเมื่อจำเป็น
 
 ### โฟลว์การตัดสินใจของ AI (AI Decision Flow)
 

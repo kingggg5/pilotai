@@ -40,6 +40,7 @@ The latest local verification covered registration, authenticated chat, chat his
 - Classifies ticket topic and urgency with deterministic character n-gram Naive Bayes.
 - Retrieves policy evidence with PostgreSQL full-text search, pgvector, and reranking.
 - Returns page-level citations and refuses to invent an answer when evidence is weak.
+- Answers clearly general, non-business questions conversationally without creating a support escalation; company, order, payment, customer, and private facts still require verified evidence.
 - Runs read-only tools automatically: `get_order_status`, `check_refund_status`, and `search_policy`.
 - Lets each customer choose staff-only handling, AI copilot, or bounded AI autopilot for every support request.
 - Extracts order/refund references, asks for missing information, routes the ticket, sets priority/tags, and auto-resolves verified low-risk requests.
@@ -158,6 +159,8 @@ The selected handling mode is persisted with the ticket and audit trail. It neve
 ### Which model answers a chat?
 
 The safe development and test default is `AI_MODE=local`: `ts-char-ngram-naive-bayes-v2` classifies topic/priority, `LocalLanguageModel` drafts a grounded template, and `hash-char-gram-v2` handles local retrieval embeddings. `AI_MODE=groq` uses `GROQ_MODEL` (default `llama-3.1-8b-instant`), `AI_MODE=openai` uses `OPENAI_MODEL` (default `gpt-5.6-luna`), and `AI_MODE=gemini` uses `GEMINI_MODEL` (default `gemini-flash-latest`). Production configuration allows OpenAI or Groq mode; all write actions still require deterministic policy checks and human approval.
+
+General conversation uses a separate bounded path: greetings, capability questions, simple explanations, and other clearly non-business messages do not search private company data or enter the staff queue. External providers can answer broad knowledge questions naturally; local mode uses deterministic conversational replies and openly asks for context when it cannot verify a niche fact. Business-specific claims always stay on the evidence-and-approval path.
 
 ## Technology stack
 

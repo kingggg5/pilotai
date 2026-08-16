@@ -78,13 +78,14 @@ export class AutomationService {
 			return { handling_mode: handlingMode, mode: "needs_customer", assigned_team: assignedTeam, tags: [...baseTags, "needs-information"], next_question: nextQuestion, actions: [...actions, { type: "request_information", status: "completed", risk: "read", detail: "Asked the customer for the missing order reference." }] };
 		}
 
-		const autoCompleted = retrieval.sufficient_evidence && ["order_status", "refund_status", "policy"].includes(classification.category);
-		actions.push({ type: "draft_response", status: retrieval.sufficient_evidence ? "completed" : "blocked", risk: "read", detail: retrieval.sufficient_evidence ? "A grounded response was prepared automatically." : "The system abstained because evidence was insufficient." });
+		const generalAnswer = retrieval.retrieval_version === "general-conversation-v1";
+		const autoCompleted = generalAnswer || (retrieval.sufficient_evidence && ["order_status", "refund_status", "policy"].includes(classification.category));
+		actions.push({ type: "draft_response", status: retrieval.sufficient_evidence ? "completed" : "blocked", risk: "read", detail: generalAnswer ? "A general-knowledge response was prepared without using customer or company records." : retrieval.sufficient_evidence ? "A grounded response was prepared automatically." : "The system abstained because evidence was insufficient." });
 		return {
 			handling_mode: handlingMode,
-			mode: handlingMode === "copilot" && retrieval.sufficient_evidence ? "copilot_ready" : autoCompleted ? "auto_completed" : "auto_routed",
+			mode: handlingMode === "copilot" && (retrieval.sufficient_evidence || generalAnswer) ? "copilot_ready" : autoCompleted ? "auto_completed" : "auto_routed",
 			assigned_team: assignedTeam,
-			tags: [...baseTags, handlingMode === "copilot" ? "staff-review" : autoCompleted ? "auto-resolved" : "staff-review"],
+			tags: [...baseTags, ...(generalAnswer ? ["general-answer"] : []), handlingMode === "copilot" ? "staff-review" : autoCompleted ? "auto-resolved" : "staff-review"],
 			next_question: null,
 			actions,
 		};

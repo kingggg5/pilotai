@@ -49,6 +49,18 @@ test("missing order reference asks the customer instead of guessing", async (con
 	assert.match(result.automation.next_question ?? "", /provide the order number/iu);
 });
 
+test("general questions get a natural answer without a support escalation", async (context) => {
+	const app = await buildContainer(settings());
+	context.after(() => app.close());
+	const result = await app.workflow.start({ message: "สวัสดีครับ ช่วยอะไรได้บ้าง", locale: "th", metadata: {} });
+	assert.equal(result.status, "completed");
+	assert.equal(result.automation.mode, "auto_completed");
+	assert.equal(result.retrieval.retrieval_version, "general-conversation-v1");
+	assert.equal(result.retrieval.documents.length, 0);
+	assert.match(result.answer ?? "", /คำถามทั่วไป|ช่วยตอบ/iu);
+	assert.equal(result.escalation_id, null);
+});
+
 test("write action pauses and only approval creates escalation", async (context) => {
 	const app = await buildContainer(settings());
 	context.after(() => app.close());

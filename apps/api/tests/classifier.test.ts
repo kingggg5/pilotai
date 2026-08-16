@@ -21,3 +21,10 @@ test("Thai keyword overrides use the same Unicode normalization as customer text
 	assert.equal(classifier.predict("สถานะคำสั่งซื้อของฉันเป็นอย่างไร").category, "order_status");
 	assert.equal(classifier.predict("ช่วยเช็กสถานะคำสั่งซื้อ SO-8821 ให้หน่อยค่ะ").category, "order_status");
 });
+
+test("general conversation keywords do not inherit an urgent business route", () => {
+	const result = classifier.predict("สวัสดีครับ ช่วยอะไรได้บ้าง");
+	assert.equal(result.category, "general");
+	assert.equal(result.priority, "low");
+	assert.equal(classifier.predict("What is photosynthesis?").category, "general");
+});

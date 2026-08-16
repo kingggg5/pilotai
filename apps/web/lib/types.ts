@@ -78,6 +78,7 @@ export interface Run {
 		priority: string;
 		modelVersion: string;
 		provider: string;
+		retrievalVersion?: string;
 		riskLevel: string;
 		reasons: string[];
 		sufficientEvidence: boolean;

@@ -78,6 +78,7 @@ class NaiveBayes<T extends Label> {
 }
 
 const includesAny = (text: string, terms: readonly string[]) => terms.some((term) => text.includes(term.normalize("NFKC").toLocaleLowerCase()));
+const businessTerms = ["order", "refund", "purchase", "payment", "billing", "account", "customer", "ticket", "support", "delivery", "tracking", "policy", "คำสั่งซื้อ", "คืนเงิน", "ชำระเงิน", "บัญชี", "ลูกค้า", "เจ้าหน้าที่", "พัสดุ", "นโยบาย", "ปัญหา", "ผิดพลาด", "ไม่ทำงาน"] as const;
 
 export class TicketClassifier {
 	readonly modelVersion = "ts-char-ngram-naive-bayes-v2";
@@ -109,6 +110,10 @@ export class TicketClassifier {
 			category = "billing"; priority = includesAny(normalized, ["three", "สาม", "urgent", "ด่วน", "60,000"]) ? "urgent" : "high";
 		} else if (includesAny(normalized, ["app crashes", "website error", "android", "แอปเด้ง", "ข้อผิดพลาด"])) {
 			category = "technical"; priority = "normal";
+		} else if (includesAny(normalized, ["hello", "hi", "hey", "what can you help", "what do you do", "how can you help", "thank you", "thanks", "สวัสดี", "หวัดดี", "ช่วยอะไรได้บ้าง", "ทำอะไรได้บ้าง", "มีอะไรบ้าง", "ขอบคุณ"])) {
+			category = "general"; priority = "low";
+		} else if (includesAny(normalized, ["what is", "tell me about", "explain", "how does", "why", "คืออะไร", "อธิบาย", "เล่า", "ทำไม", "อย่างไร"]) && !includesAny(normalized, businessTerms)) {
+			category = "general"; priority = "low";
 		}
 
 		const confidence = Math.max(probabilities[category], priorityProbabilities[priority]);

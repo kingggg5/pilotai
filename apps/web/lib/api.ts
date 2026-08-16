@@ -61,7 +61,7 @@ type ApiRun = {
 	thread_id: string;
 	status: Run["state"];
 	classification: { category: string; priority: string; confidence: number; model_version: string };
-	retrieval: { documents: ApiEvidence[]; sufficient_evidence: boolean; top_score: number };
+	retrieval: { documents: ApiEvidence[]; sufficient_evidence: boolean; top_score: number; retrieval_version?: string };
 	draft: string;
 	answer?: string;
 	policy: { reasons: string[]; risk_level: string };
@@ -192,6 +192,7 @@ function toRun(run: ApiRun, ticketId: string): Run {
 			priority: run.classification.priority,
 			modelVersion: run.classification.model_version,
 			provider: run.provider,
+			retrievalVersion: run.retrieval.retrieval_version,
 			riskLevel: run.policy.risk_level,
 			reasons: run.policy.reasons,
 			sufficientEvidence: run.retrieval.sufficient_evidence,

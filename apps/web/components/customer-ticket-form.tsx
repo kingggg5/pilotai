@@ -32,6 +32,7 @@ function requestsStaff(text: string) {
 }
 
 function workflowMessage(run: Run, copy: Copy): string {
+	if (run.ai.retrievalVersion === "general-conversation-v1" && run.automation.mode === "auto_completed") return copy.customer.generalAnswered;
 	if (run.automation.mode === "manual_queue") return copy.customer.manualQueued;
 	if (run.automation.mode === "copilot_ready") return copy.customer.copilotReady;
 	if (run.automation.mode === "auto_completed") return copy.customer.autoCompleted;

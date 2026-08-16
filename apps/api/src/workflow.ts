@@ -20,6 +20,17 @@ const State = new StateSchema({
 });
 type TicketState = typeof State.State;
 
+const businessContextMarkers = [
+	"servicepilot", "order", "refund", "purchase", "payment", "billing", "account", "customer", "ticket", "support", "delivery", "tracking", "policy", "company", "founder", "private", "personal",
+	"คำสั่งซื้อ", "คืนเงิน", "ซื้อสินค้า", "ชำระเงิน", "เรียกเก็บ", "บัญชี", "ลูกค้า", "ทิกเก็ต", "เจ้าหน้าที่", "พัสดุ", "ติดตาม", "นโยบาย", "บริษัท", "ผู้ก่อตั้ง", "ส่วนตัว", "ข้อมูลส่วนตัว", "ปัญหา", "ผิดพลาด", "ใช้งานไม่ได้", "ไม่ทำงาน", "ตรวจสอบ",
+] as const;
+
+function isGeneralKnowledgeRequest(message: string, category: string) {
+	if (category !== "general") return false;
+	const normalized = message.normalize("NFKC").toLocaleLowerCase().replace(/\s+/gu, " ");
+	return !businessContextMarkers.some((marker) => normalized.includes(marker));
+}
+
 export class AssistanceWorkflow {
 	readonly graph;
 	readonly checkpointerBackend: string;
@@ -67,6 +78,7 @@ export class AssistanceWorkflow {
 		const classification = state.classification!;
 		const query = `${classification.category}: ${state.message}`;
 		if (state.handling_mode === "manual") return { retrieval: { query, documents: [], sufficient_evidence: false, top_score: 0, abstention_reason: "Human handling was selected; no AI business tool was called.", retrieval_version: "manual-intake-v1" } };
+		if (isGeneralKnowledgeRequest(state.message, classification.category)) return { retrieval: { query, documents: [], sufficient_evidence: true, top_score: 0, abstention_reason: null, retrieval_version: "general-conversation-v1" } };
 		if (["order_status", "refund_status"].includes(classification.category)) {
 			if (!state.order_id) return { retrieval: { query, documents: [], sufficient_evidence: false, top_score: 0, abstention_reason: "An order number is required for a verified live lookup.", retrieval_version: "live-tool-v2" } };
 			const tenantId = String(state.metadata.tenant_id ?? "tenant-local");
@@ -86,7 +98,7 @@ export class AssistanceWorkflow {
 			const thai = state.entities!.language === "th";
 			return { draft: thai ? "ยังไม่พบหลักฐานที่ตรวจสอบได้เพียงพอ จึงขอไม่คาดเดาคำตอบ กรุณาระบุเลขคำสั่งซื้อหรือส่งเรื่องให้เจ้าหน้าที่ตรวจสอบ" : "I do not have enough verified evidence to answer safely. Please provide the order reference or route this ticket to a specialist." };
 		}
-		return { draft: await this.languageModel.draft({ message: state.message, customerId: state.customer_id ?? null, orderId: state.order_id ?? null, conversation: state.conversation_context, classification: state.classification!, evidence: state.retrieval!.documents }) };
+		return { draft: await this.languageModel.draft({ message: state.message, customerId: state.customer_id ?? null, orderId: state.order_id ?? null, conversation: state.conversation_context, allowGeneralKnowledge: state.retrieval!.retrieval_version === "general-conversation-v1", classification: state.classification!, evidence: state.retrieval!.documents }) };
 	}
 
 	private async checkPolicy(state: TicketState) { return { policy: this.policy.evaluate(state.message, state.classification!, state.retrieval!) }; }

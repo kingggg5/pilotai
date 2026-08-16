@@ -73,8 +73,12 @@ export class MemoryRunRepository implements RunRepository {
   async save(run: AssistResponse, tenantId: string) { this.#runs.set(tenantKey(tenantId, run.thread_id), structuredClone(run)); }
   async get(id: string, tenantId: string) { const run = this.#runs.get(tenantKey(tenantId, id)); return run ? structuredClone(run) : undefined; }
   async getMany(ids: readonly string[], tenantId: string) {
-    const entries = await Promise.all(ids.map(async (id) => [id, await this.get(id, tenantId)] as const));
-    return new Map(entries.filter((entry): entry is readonly [string, AssistResponse] => Boolean(entry[1])));
+    const entries: (readonly [string, AssistResponse])[] = [];
+    for (const id of ids) {
+      const item = await this.get(id, tenantId);
+      if (item) entries.push([id, item] as const);
+    }
+    return new Map(entries);
   }
   async health() { return true; }
 }
@@ -104,6 +108,7 @@ export class MemoryTicketRepository implements TicketRepository {
       .filter((ticket) => !filters.priority || ticket.priority === filters.priority)
       .filter((ticket) => !filters.status || ticket.status === filters.status)
       .filter((ticket) => !filters.channel || ticket.channel === filters.channel)
+      .filter((ticket) => !filters.handlingMode || ticket.handling_mode === filters.handlingMode)
       .filter((ticket) => !filters.createdFrom || ticket.created_at.slice(0, 10) >= filters.createdFrom)
       .filter((ticket) => !filters.createdTo || ticket.created_at.slice(0, 10) <= filters.createdTo)
       .filter((ticket) => !filters.customerId || ticket.customer_id === filters.customerId)

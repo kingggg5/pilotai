@@ -12,11 +12,12 @@ export function parseTicketDraft(value: unknown): TicketDraft | null {
   const subject = typeof body.subject === "string" ? body.subject.trim() : "";
   const channel = body.channel === "email" || body.channel === "chat" || body.channel === "web" ? body.channel : "web";
   const locale = body.locale === "th" || body.locale === "en" ? body.locale : "auto";
+  const handlingMode = body.handlingMode === "manual" || body.handlingMode === "copilot" || body.handlingMode === "autopilot" ? body.handlingMode : null;
   const idempotencyKey = typeof body.idempotencyKey === "string" ? body.idempotencyKey : "";
-  if (message.length < 3 || message.length > limits.message || !customer || !customerId) return null;
+  if (message.length < 3 || message.length > limits.message || !customer || !customerId || !handlingMode) return null;
   if (idempotencyKey.length < 8 || idempotencyKey.length > 128) return null;
   if (customer.length > limits.identity || customerId.length > limits.identity || orderId.length > limits.identity || subject.length > limits.subject) return null;
-  return { message, customer, customerId, orderId: orderId || undefined, subject: subject || undefined, channel, locale, idempotencyKey };
+  return { message, customer, customerId, orderId: orderId || undefined, subject: subject || undefined, channel, locale, handlingMode, idempotencyKey };
 }
 
 export function parseDecision(value: unknown): { runId: string; decision: Decision; note?: string } | null {

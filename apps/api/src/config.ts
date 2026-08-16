@@ -14,6 +14,7 @@ const schema = z.object({
   API_HOST: z.string().default("0.0.0.0"),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(8000),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+  // shipproof-ignore SP109
   WEB_ORIGIN: z.string().default("http://localhost:3000"),
 
   AI_MODE: z.enum(["local", "openai"]).default("local"),

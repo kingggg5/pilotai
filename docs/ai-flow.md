@@ -19,8 +19,14 @@ sequenceDiagram
 
     Customer->>Web: Submit message or purchase request
     Web->>API: Authenticated, tenant-scoped request
+    API->>Graph: Start with persisted handling mode
+    alt Staff-only mode
+        Graph->>Audit: Record selected mode
+        Graph-->>Staff: Queue request; no AI business tool call
+    else Copilot or autopilot
     API->>ML: Classify category and urgency
     ML-->>Graph: Labels, confidence, model version
+    Graph->>Graph: Extract order/refund reference and missing fields
     Graph->>Data: Read order/refund or retrieve authorized policy pages
     Data-->>Graph: Live record or ranked evidence with citations
 
@@ -36,7 +42,13 @@ sequenceDiagram
 
         Graph->>Graph: Apply deterministic policy rules
         alt Read-only and allowed
-            Graph-->>Customer: Grounded answer with citation
+            alt Copilot mode
+                Graph-->>Staff: Present evidence and prepared response
+            else Autopilot mode
+                Graph->>Data: Route team, set priority/tags, resolve verified ticket
+                Graph->>Audit: Record automation.completed
+                Graph-->>Customer: Grounded answer with citation
+            end
         else Unsafe request
             Graph-->>Customer: Refusal
         else Write action or high risk
@@ -49,6 +61,7 @@ sequenceDiagram
                 Graph-->>Customer: Confirm escalation reference
             end
         end
+    end
     end
 ```
 
@@ -82,6 +95,7 @@ The model returns a draft. It does not execute tools, change orders, create esca
 - PostgreSQL order/refund reads and catalog writes
 - Role-filtered hybrid retrieval and evidence threshold
 - Prompt-injection markers and policy decisions
+- Automatic team routing, priority/tags, missing-information questions, and low-risk resolution rules
 - Human approval and escalation execution
 - Append-only audit records, logs, metrics, and OpenTelemetry traces
 
@@ -92,10 +106,20 @@ LangGraph is an orchestration library in this system, not an autonomous agent or
 1. No evidence means no generated factual answer.
 2. The model receives only evidence already authorized for the tenant and role.
 3. Model output is a draft, never an authorization decision.
-4. Read-only tools may run automatically.
-5. Write actions and high-risk cases pause for a staff decision.
+4. Read-only tools and low-risk internal ticket routing/status updates may run automatically.
+5. Financial, account-security, purchase, escalation, and other high-risk writes pause for a staff decision.
 6. Rejection produces no external side effect.
 7. Approval and execution are recorded in the append-only audit trail.
+
+## Per-request handling modes
+
+| Mode | AI behavior | Ticket outcome |
+| --- | --- | --- |
+| `manual` | Classification may support deterministic intake, but no AI business tool is called | New ticket in the responsible human queue |
+| `copilot` | Retrieves authorized evidence and prepares a grounded draft | Draft-ready ticket for staff review |
+| `autopilot` | Runs allow-listed read tools and low-risk internal updates | Auto-resolves only when verified evidence is sufficient |
+
+The chosen mode is stored with the ticket, exposed in the staff workspace and queue filters, counted in operations metrics, and recorded in the audit log. High-risk actions still require approval in every AI-enabled mode.
 
 ## Runtime modes
 

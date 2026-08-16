@@ -123,6 +123,8 @@ CREATE INDEX IF NOT EXISTS support_tickets_tenant_created_idx
     ON support_tickets (tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS support_tickets_tenant_status_idx
     ON support_tickets (tenant_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS support_tickets_tenant_handling_mode_idx
+    ON support_tickets (tenant_id, (payload->>'handling_mode'), created_at DESC);
 CREATE INDEX IF NOT EXISTS support_tickets_search_idx
     ON support_tickets USING gin ((lower(ticket_id || ' ' || coalesce(payload->>'reference','') || ' ' || coalesce(payload->>'subject','') || ' ' || coalesce(payload->>'customer','') || ' ' || coalesce(payload->>'customer_id','') || ' ' || coalesce(payload->>'customer_email','') || ' ' || coalesce(payload->>'customer_phone','') || ' ' || coalesce(payload->>'order_id','') || ' ' || coalesce(payload->>'summary',''))) gin_trgm_ops);
 

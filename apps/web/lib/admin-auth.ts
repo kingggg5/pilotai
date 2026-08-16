@@ -47,9 +47,11 @@ export function verifyAdminPassword(candidate: string) {
 export function createAdminToken() {
   const secret = sessionSecret();
   if (!secret) throw new Error("Admin authentication is not configured");
+  const adminSub = process.env.SERVICEPILOT_ADMIN_SUBJECT ?? "support-admin";
+  const tenantId = process.env.SERVICEPILOT_TENANT_ID ?? "tenant-local";
   const session: AdminSession = {
-    sub: process.env.SERVICEPILOT_ADMIN_SUBJECT || "support-admin",
-    tenantId: process.env.SERVICEPILOT_TENANT_ID || "tenant-local",
+    sub: adminSub,
+    tenantId: tenantId,
     roles: ["agent", "approver", "audit:read"],
     exp: Math.floor(Date.now() / 1000) + ADMIN_SESSION_SECONDS,
   };

@@ -10,9 +10,11 @@ const draft = parseTicketDraft({
   customerId: "customer@example.com",
   channel: "web",
   locale: "en",
+  handlingMode: "autopilot",
   idempotencyKey: "request-12345678",
 });
 assert.equal(draft?.idempotencyKey, "request-12345678");
+assert.equal(draft?.handlingMode, "autopilot");
 
 assert.equal(parseTicketDraft({ message: "Help", customer: "A", customerId: "B" }), null);
 assert.equal(parseDecision({ runId: "run", decision: "approve", note: "x".repeat(2_001) }), null);
@@ -22,8 +24,8 @@ assert.deepEqual(audit.filters, { action: "ticket.created", outcome: "success", 
 assert.equal(auditPageUrl("th", audit, "cursor"), "/admin/audit?lang=th&action=ticket.created&outcome=success&resource=ORD-&cursor=cursor");
 assert.deepEqual(parseAuditFilters({ action: "unknown", outcome: "unknown" }).filters, {});
 
-const queue = parseQueueFilters({ q: " refund ", number: " ORD-1001 ", priority: "urgent", status: "investigating", channel: "email", from: "2026-08-01", to: "2026-08-14", sort: "priority" });
-assert.deepEqual(queue, { query: "refund", number: "ORD-1001", priority: "urgent", status: "investigating", channel: "email", createdFrom: "2026-08-01", createdTo: "2026-08-14", sort: "priority" });
-assert.equal(queuePageUrl("en", queue, 2), "/admin?lang=en&q=refund&number=ORD-1001&priority=urgent&status=investigating&channel=email&from=2026-08-01&to=2026-08-14&sort=priority&page=2");
+const queue = parseQueueFilters({ q: " refund ", number: " ORD-1001 ", priority: "urgent", status: "investigating", channel: "email", handling: "autopilot", from: "2026-08-01", to: "2026-08-14", sort: "priority" });
+assert.deepEqual(queue, { query: "refund", number: "ORD-1001", priority: "urgent", status: "investigating", channel: "email", handlingMode: "autopilot", createdFrom: "2026-08-01", createdTo: "2026-08-14", sort: "priority" });
+assert.equal(queuePageUrl("en", queue, 2), "/admin?lang=en&q=refund&number=ORD-1001&priority=urgent&status=investigating&channel=email&handling=autopilot&from=2026-08-01&to=2026-08-14&sort=priority&page=2");
 
 console.log("validation contracts passed");

@@ -76,9 +76,17 @@ export class OperationsMetrics {
   failures = 0;
   pending = 0;
   abstentions = 0;
+  autoCompleted = 0;
+  autoRouted = 0;
+  customerFollowups = 0;
+  automationEvaluated = 0;
+  manualSelected = 0;
+  copilotSelected = 0;
+  autopilotSelected = 0;
   readonly latencies: number[] = [];
   record(status: string, latency = 0) { this.requests += 1; if (status === "awaiting_approval") this.pending += 1; if (status === "needs_evidence") this.abstentions += 1; if (latency) { this.latencies.push(latency); if (this.latencies.length > 1_000) this.latencies.shift(); } }
+  recordAutomation(mode: string, handlingMode = "autopilot") { this.automationEvaluated += 1; if (mode === "auto_completed") this.autoCompleted += 1; if (mode === "auto_routed") this.autoRouted += 1; if (mode === "needs_customer") this.customerFollowups += 1; if (handlingMode === "manual") this.manualSelected += 1; if (handlingMode === "copilot") this.copilotSelected += 1; if (handlingMode === "autopilot") this.autopilotSelected += 1; }
   failure() { this.failures += 1; }
   resolveApproval() { this.pending = Math.max(0, this.pending - 1); }
-  snapshot() { const values = [...this.latencies].sort((a, b) => a - b); const percentile = (value: number) => values[Math.max(0, Math.ceil(values.length * value) - 1)] ?? 0; return { requests_total: this.requests, failures_total: this.failures, approvals_pending: this.pending, abstentions_total: this.abstentions, latency_p50_ms: percentile(0.5), latency_p95_ms: percentile(0.95), metrics: [{ name: "failure_rate", value: this.requests ? this.failures / this.requests : 0, unit: "ratio", status: this.failures ? "watch" : "healthy" }, { name: "approval_backlog", value: this.pending, unit: "tickets", status: this.pending > 20 ? "watch" : "healthy" }] }; }
+  snapshot() { const values = [...this.latencies].sort((a, b) => a - b); const percentile = (value: number) => values[Math.max(0, Math.ceil(values.length * value) - 1)] ?? 0; return { requests_total: this.requests, failures_total: this.failures, approvals_pending: this.pending, abstentions_total: this.abstentions, automation_evaluated_total: this.automationEvaluated, automation_completed_total: this.autoCompleted, automation_routed_total: this.autoRouted, customer_followups_total: this.customerFollowups, handling_manual_total: this.manualSelected, handling_copilot_total: this.copilotSelected, handling_autopilot_total: this.autopilotSelected, latency_p50_ms: percentile(0.5), latency_p95_ms: percentile(0.95), metrics: [{ name: "failure_rate", value: this.requests ? this.failures / this.requests : 0, unit: "ratio", status: this.failures ? "watch" : "healthy" }, { name: "approval_backlog", value: this.pending, unit: "tickets", status: this.pending > 20 ? "watch" : "healthy" }, { name: "automation_rate", value: this.automationEvaluated ? this.autoCompleted / this.automationEvaluated : 0, unit: "ratio", status: "healthy" }, { name: "autopilot_adoption", value: this.automationEvaluated ? this.autopilotSelected / this.automationEvaluated : 0, unit: "ratio", status: "healthy" }] }; }
 }

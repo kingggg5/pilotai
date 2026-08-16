@@ -16,3 +16,8 @@ test("guardrails override uncertain model output", () => {
   assert.equal(result.category, "security");
   assert.equal(result.priority, "high");
 });
+test("Thai keyword overrides use the same Unicode normalization as customer text", () => {
+  const classifier = new TicketClassifier();
+  assert.equal(classifier.predict("สถานะคำสั่งซื้อของฉันเป็นอย่างไร").category, "order_status");
+  assert.equal(classifier.predict("ช่วยเช็กสถานะคำสั่งซื้อ SO-8821 ให้หน่อยค่ะ").category, "order_status");
+});

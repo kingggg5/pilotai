@@ -89,6 +89,7 @@ function QueueFilters({ copy, language, filters }: { copy: Copy; language: Langu
       <label><span>{copy.admin.priorityFilter}</span><select name="priority" defaultValue={filters.priority || ""}><option value="">{copy.admin.all}</option>{priorities.map((value) => <option key={value} value={value}>{localizePriority(copy, value)}</option>)}</select></label>
       <label><span>{copy.admin.statusFilter}</span><select name="status" defaultValue={filters.status || ""}><option value="">{copy.admin.all}</option>{statuses.map((value) => <option key={value} value={value}>{localizeStatus(copy, value)}</option>)}</select></label>
       <label><span>{copy.admin.channel}</span><select name="channel" defaultValue={filters.channel || ""}><option value="">{copy.admin.all}</option><option value="web">Web</option><option value="email">Email</option><option value="chat">Chat</option></select></label>
+      <label><span>{copy.admin.handlingMode}</span><select name="handling" defaultValue={filters.handlingMode || ""}><option value="">{copy.admin.all}</option>{(["manual", "copilot", "autopilot"] as const).map((value) => <option key={value} value={value}>{copy.admin.handlingModes[value]}</option>)}</select></label>
       <label><span>{copy.admin.sort}</span><select name="sort" defaultValue={filters.sort}><option value="newest">{copy.admin.newest}</option><option value="oldest">{copy.admin.oldest}</option><option value="priority">{copy.admin.prioritySort}</option></select></label>
       <button className="primary-button" type="submit">{copy.admin.apply}</button>
     </form>
@@ -109,7 +110,7 @@ function TicketWorkspace({ ticket, run, copy, language, note, setNote, pending, 
       <dl className="ticket-facts ticket-facts-rich">
         <Fact label={copy.admin.customer} value={ticket.customer} /><Fact label={copy.admin.email} value={ticket.customerEmail || (ticket.customerId?.includes("@") ? ticket.customerId : "—")} /><Fact label={copy.admin.phone} value={ticket.customerPhone || "—"} /><Fact label={copy.admin.contact} value={ticket.customerId || "—"} />
         <Fact label={copy.admin.orderNumber} value={ticket.orderId || "—"} /><Fact label={copy.admin.channel} value={ticket.channel} /><Fact label={copy.admin.created} value={date(ticket.createdAt)} /><Fact label={copy.admin.updated} value={date(ticket.updatedAt)} />
-        <Fact label={copy.admin.team} value={ticket.assignedTeam} /><Fact label={copy.admin.confidence} value={`${Math.round(run.confidence * 100)}%`} />{ticket.amount ? <Fact label={copy.commerce.subtotal} value={ticket.amount} /> : null}
+        <Fact label={copy.admin.team} value={ticket.assignedTeam} /><Fact label={copy.admin.handlingMode} value={copy.admin.handlingModes[ticket.handlingMode]} /><Fact label={copy.admin.confidence} value={`${Math.round(run.confidence * 100)}%`} />{ticket.amount ? <Fact label={copy.commerce.subtotal} value={ticket.amount} /> : null}
       </dl>
       <div className="admin-columns">
         <div className="work-column">
@@ -120,6 +121,7 @@ function TicketWorkspace({ ticket, run, copy, language, note, setNote, pending, 
         <div className="decision-column">
           <TicketControls key={ticket.id} ticket={ticket} copy={copy} onTicket={onTicket} onNotice={onNotice} />
           <AiReview run={run} copy={copy} />
+          <AutomationCard run={run} copy={copy} />
           <ApprovalCard ticket={ticket} run={run} copy={copy} note={note} setNote={setNote} pending={pending} error={error} decide={decide} />
           <section className="trace-section"><h3>{copy.admin.trace}</h3>{run.trace.map((step) => <div key={step.id}><i className={`trace-${step.status}`} /><span><strong>{step.title}</strong><small>{step.detail}</small></span></div>)}</section>
         </div>
@@ -153,6 +155,11 @@ function TicketControls({ ticket, copy, onTicket, onNotice }: { ticket: Ticket; 
 function AiReview({ run, copy }: { run: Run; copy: Copy }) {
   const category = run.ai.category === "purchase" ? copy.admin.purchase : run.ai.category;
   return <section className="ai-review"><div className="section-heading"><h3>{copy.admin.aiReview}</h3><span className={run.ai.sufficientEvidence ? "ai-pass" : "ai-warn"}>{run.ai.sufficientEvidence ? copy.admin.yes : copy.admin.no}</span></div><p className="ai-review-provider"><span className="ai-live-dot" />{run.ai.provider === "openai" ? copy.admin.aiLive : run.ai.provider}</p><dl><Fact label={copy.admin.aiCategory} value={category} /><Fact label={copy.admin.aiRisk} value={run.ai.riskLevel} /><Fact label={copy.admin.aiModel} value={run.ai.modelVersion} /><Fact label={copy.admin.aiProvider} value={run.ai.provider} /></dl>{run.ai.reasons.length ? <ul>{run.ai.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : null}</section>;
+}
+
+function AutomationCard({ run, copy }: { run: Run; copy: Copy }) {
+  const mode = run.automation.mode === "manual_queue" ? copy.admin.manualQueue : run.automation.mode === "copilot_ready" ? copy.admin.copilotReady : run.automation.mode === "auto_completed" ? copy.admin.autoCompleted : run.automation.mode === "needs_customer" ? copy.admin.needsCustomer : run.automation.mode === "auto_routed" ? copy.admin.autoRouted : run.automation.mode.replaceAll("_", " ");
+  return <section className="ai-review automation-card"><div className="section-heading"><h3>{copy.admin.automation}</h3><span className={run.automation.mode === "auto_completed" ? "ai-pass" : "ai-warn"}>{mode}</span></div><p><strong>{copy.admin.handlingMode}:</strong> {copy.admin.handlingModes[run.automation.handlingMode]}</p>{run.automation.nextQuestion ? <p><strong>{copy.admin.nextQuestion}:</strong> {run.automation.nextQuestion}</p> : null}<ul>{run.automation.actions.map((action, index) => <li key={`${action.type}-${index}`}><strong>{action.type.replaceAll("_", " ")}</strong> · {action.status}<br /><small>{action.detail}</small></li>)}</ul></section>;
 }
 
 function ApprovalCard({ ticket, run, copy, note, setNote, pending, error, decide }: { ticket: Ticket; run: Run; copy: Copy; note: string; setNote: (value: string) => void; pending?: Decision; error: string; decide: (decision: Decision) => void }) {

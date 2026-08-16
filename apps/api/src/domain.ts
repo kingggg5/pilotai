@@ -6,10 +6,12 @@ export const TicketStatus = z.enum(["new", "investigating", "needs_approval", "d
 export const WorkflowStatus = z.enum(["awaiting_approval", "completed", "needs_evidence", "refused"]);
 export const RiskLevel = z.enum(["low", "medium", "high"]);
 export const Locale = z.enum(["auto", "th", "en"]);
+export const HandlingMode = z.enum(["manual", "copilot", "autopilot"]);
 export type Category = z.infer<typeof Category>;
 export type Priority = z.infer<typeof Priority>;
 export type TicketStatus = z.infer<typeof TicketStatus>;
 export type WorkflowStatus = z.infer<typeof WorkflowStatus>;
+export type HandlingMode = z.infer<typeof HandlingMode>;
 
 export const ProductLine = z.object({
   product_id: z.string().min(1).max(128),
@@ -81,6 +83,34 @@ export const PolicyDecision = z.object({
 });
 export type PolicyDecision = z.infer<typeof PolicyDecision>;
 
+export const ExtractedEntities = z.object({
+  order_id: z.string().max(128).nullable(),
+  refund_id: z.string().max(128).nullable(),
+  language: z.enum(["th", "en"]),
+  requested_action: z.string().max(120),
+  missing_fields: z.array(z.string().max(80)),
+  confidence: z.number().min(0).max(1),
+});
+export type ExtractedEntities = z.infer<typeof ExtractedEntities>;
+
+export const AutomationAction = z.object({
+  type: z.enum(["extract_entities", "lookup_order", "lookup_refund", "search_policy", "route_ticket", "set_priority", "draft_response", "request_information", "create_escalation"]),
+  status: z.enum(["completed", "pending", "needs_input", "blocked"]),
+  risk: z.enum(["read", "low_write", "high_write"]),
+  detail: z.string().max(500),
+});
+export type AutomationAction = z.infer<typeof AutomationAction>;
+
+export const AutomationResult = z.object({
+  handling_mode: HandlingMode,
+  mode: z.enum(["manual_queue", "copilot_ready", "auto_completed", "auto_routed", "needs_customer", "needs_approval", "human_completed", "human_rejected", "refused"]),
+  assigned_team: z.string().max(120),
+  tags: z.array(z.string().max(80)),
+  next_question: z.string().max(500).nullable(),
+  actions: z.array(AutomationAction),
+});
+export type AutomationResult = z.infer<typeof AutomationResult>;
+
 export const ApprovalPrompt = z.object({
   type: z.literal("human_approval").default("human_approval"), reasons: z.array(z.string()),
   risk_level: RiskLevel, draft: z.string(),
@@ -94,9 +124,9 @@ export type ApprovalRecord = z.infer<typeof ApprovalRecord>;
 export const AssistRequest = z.object({
   message: z.string().trim().min(3).max(8_000), customer_id: z.string().max(128).nullable().optional(),
   order_id: z.string().max(128).nullable().optional(), metadata: z.record(z.string(), z.unknown()).default({}),
-  locale: Locale.default("auto"),
+  locale: Locale.default("auto"), handling_mode: HandlingMode.default("autopilot"),
 });
-export type AssistRequest = z.infer<typeof AssistRequest>;
+export type AssistRequest = z.input<typeof AssistRequest>;
 export const ApprovalResumeRequest = z.object({
   decision: z.enum(["approve", "reject"]), feedback: z.string().max(2_000).nullable().optional(),
   reviewer: z.string().max(128).nullable().optional(),
@@ -106,6 +136,7 @@ export const DecisionRequest = z.object({ decision: z.enum(["approve", "reject"]
 export const AssistResponse = z.object({
   thread_id: z.string(), status: WorkflowStatus, classification: ClassificationResult,
   retrieval: RetrievalResult, draft: z.string(), policy: PolicyDecision,
+  entities: ExtractedEntities, automation: AutomationResult,
   approval: z.union([ApprovalPrompt, ApprovalRecord]).nullable().optional(), answer: z.string().nullable().optional(),
   escalation_id: z.string().nullable().optional(), trace_id: z.string().nullable().optional(), provider: z.string(),
 });
@@ -116,6 +147,7 @@ export const TicketSummary = z.object({
   customer_id: z.string().nullable().optional(), customer_email: z.string().nullable().optional(), customer_phone: z.string().nullable().optional(),
   channel: z.enum(["email", "chat", "web"]),
   locale: Locale, priority: Priority, status: TicketStatus,
+  handling_mode: HandlingMode.default("autopilot"),
   confidence: z.number().min(0).max(1), wait_minutes: z.number().int().nonnegative(),
   summary: z.string(), requested_action: z.string(), order_id: z.string().nullable().optional(),
   amount: z.string().nullable().optional(), assigned_team: z.string().max(120),
@@ -127,9 +159,10 @@ export const TicketCreateRequest = z.object({
   message: z.string().trim().min(3).max(8_000), subject: z.string().max(240).nullable().optional(),
   customer: z.string().trim().min(1).max(240).default("Customer"), customer_id: z.string().max(128).nullable().optional(),
   order_id: z.string().max(128).nullable().optional(), channel: z.enum(["email", "chat", "web"]).default("web"),
-  locale: Locale.default("auto"), idempotency_key: z.string().min(8).max(128).nullable().optional(),
+  locale: Locale.default("auto"), handling_mode: HandlingMode.default("autopilot"),
+  idempotency_key: z.string().min(8).max(128).nullable().optional(),
 });
-export type TicketCreateRequest = z.infer<typeof TicketCreateRequest>;
+export type TicketCreateRequest = z.input<typeof TicketCreateRequest>;
 export const TicketUpdateRequest = z.object({
   status: TicketStatus.optional(), priority: Priority.optional(), assigned_team: z.string().trim().min(1).max(120).optional(),
 }).refine((value) => Object.keys(value).length > 0, "At least one field is required");
@@ -143,6 +176,7 @@ export type TicketListFilters = {
   priority?: Priority;
   status?: TicketStatus;
   channel?: "email" | "chat" | "web";
+  handlingMode?: HandlingMode;
   createdFrom?: string;
   createdTo?: string;
   sort?: "newest" | "oldest" | "priority";

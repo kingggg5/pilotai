@@ -163,6 +163,19 @@ a { color: inherit; text-decoration: none; }
 .conversation-card { padding: clamp(26px, 4vw, 48px); color: var(--paper); background: var(--graphite); border-radius: var(--radius); box-shadow: var(--shadow); }
 .conversation-card h2 { max-width: 21ch; margin: 0 0 32px; font-size: var(--text-title); line-height: 1.08; letter-spacing: -.03em; }
 .conversation-card form, .login-card form { display: grid; gap: 20px; }
+.handling-modes { min-width: 0; margin: 0; padding: 0; border: 0; }
+.handling-modes legend { padding: 0; color: var(--paper); font-weight: 850; }
+.handling-modes > p { margin: 6px 0 12px; color: var(--muted-light); font-size: var(--text-label); line-height: 1.45; }
+.handling-modes > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.handling-option { min-height: 112px; display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--field); border-radius: var(--control); color: var(--paper); background: var(--raised); cursor: pointer; transition: border-color 160ms ease, background 160ms ease, transform 160ms ease; }
+.handling-option:hover { border-color: var(--muted); transform: translateY(-1px); }
+.handling-option:has(input:checked) { border-color: var(--lime); background: var(--graphite); }
+.handling-option input { width: 18px; min-height: 18px; margin: 2px 0 0; padding: 0; accent-color: var(--lime); flex: 0 0 auto; }
+.handling-option > span { min-width: 0; display: grid; gap: 7px; }
+.handling-option strong { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; line-height: 1.25; }
+.handling-option em { padding: 3px 7px; border-radius: 999px; color: var(--black); background: var(--lime); font-size: var(--text-label); font-style: normal; }
+.handling-option small { justify-self: start; color: var(--muted-light); font-weight: 500; line-height: 1.4; }
+.handling-boundary { display: block; margin-top: 10px; color: #aaa9a2; font-weight: 500; line-height: 1.45; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 label { display: grid; gap: 8px; color: var(--paper-strong); font-size: var(--text-body); font-weight: 700; }
 input, textarea, select { width: 100%; border: 1px solid var(--field); border-radius: var(--control); color: var(--paper); background: var(--raised); transition: border-color 140ms ease, background 140ms ease; }
@@ -377,6 +390,8 @@ label small { justify-self: end; color: #aaa9a2; font-weight: 500; }
   .customer-main { width: calc(100% - 28px); margin: 42px auto; gap: 42px; }
   .service-mark { margin-bottom: 30px; }
   .field-grid { grid-template-columns: 1fr; }
+  .handling-modes > div { grid-template-columns: 1fr; }
+  .handling-option { min-height: 0; }
   .conversation-card { padding: 24px; }
   .customer-footer { width: calc(100% - 28px); flex-direction: column; }
   .admin-heading { width: calc(100% - 28px); align-items: start; flex-direction: column; }

@@ -87,6 +87,7 @@ export class PostgresTicketRepository implements TicketRepository {
     if (filters.priority) conditions.push(`payload->>'priority'=${add(filters.priority)}`);
     if (filters.status) conditions.push(`status=${add(filters.status)}`);
     if (filters.channel) conditions.push(`payload->>'channel'=${add(filters.channel)}`);
+    if (filters.handlingMode) conditions.push(`payload->>'handling_mode'=${add(filters.handlingMode)}`);
     if (filters.createdFrom) conditions.push(`created_at>=${add(filters.createdFrom)}::date`);
     if (filters.createdTo) conditions.push(`created_at<${add(filters.createdTo)}::date + interval '1 day'`);
     if (filters.customerId) conditions.push(`payload->>'customer_id'=${add(filters.customerId)}`);

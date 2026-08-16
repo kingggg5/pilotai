@@ -3,6 +3,7 @@ export type Priority = "urgent" | "high" | "normal" | "low";
 export type TicketStatus = "needs_approval" | "investigating" | "draft_ready" | "new" | "resolved";
 export type Decision = "approve" | "reject";
 export type WorkflowState = "awaiting_approval" | "running" | "completed" | "rejected" | "needs_evidence" | "refused";
+export type HandlingMode = "manual" | "copilot" | "autopilot";
 
 export interface Ticket {
   id: string;
@@ -13,6 +14,7 @@ export interface Ticket {
   customerEmail?: string;
   customerPhone?: string;
   channel: "email" | "chat" | "web";
+  handlingMode: HandlingMode;
   priority: Priority;
   status: TicketStatus;
   confidence: number;
@@ -57,6 +59,20 @@ export interface Run {
   reviewer?: string;
   trace: TraceStep[];
   evidence: Evidence[];
+  entities: {
+    orderId?: string;
+    refundId?: string;
+    language: Language;
+    requestedAction: string;
+    missingFields: string[];
+  };
+  automation: {
+    handlingMode: HandlingMode;
+    mode: "manual_queue" | "copilot_ready" | "auto_completed" | "auto_routed" | "needs_customer" | "needs_approval" | "human_completed" | "human_rejected" | "refused";
+    assignedTeam: string;
+    nextQuestion?: string;
+    actions: Array<{ type: string; status: "completed" | "pending" | "needs_input" | "blocked"; risk: "read" | "low_write" | "high_write"; detail: string }>;
+  };
   ai: {
     category: string;
     priority: string;
@@ -76,6 +92,7 @@ export interface QueueFilters {
   priority?: Priority;
   status?: TicketStatus;
   channel?: Ticket["channel"];
+  handlingMode?: HandlingMode;
   createdFrom?: string;
   createdTo?: string;
   sort: QueueSort;
@@ -132,6 +149,7 @@ export interface TicketDraft {
   orderId?: string;
   channel: "email" | "chat" | "web";
   locale: "auto" | "th" | "en";
+  handlingMode: HandlingMode;
   idempotencyKey: string;
 }
 

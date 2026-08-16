@@ -3,6 +3,7 @@ import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 
 import { buildEmbedder, buildLanguageModel } from "./ai.js";
 import { AuditService } from "./audit.js";
+import { AutomationService } from "./automation.js";
 import { TicketClassifier } from "./classifier.js";
 import type { Settings } from "./config.js";
 import { AssistanceWorkflow } from "./workflow.js";
@@ -74,7 +75,7 @@ export async function buildContainer(settings: Settings): Promise<AppContainer> 
 
   const tools = new BusinessTools(orderStatuses, refundStatuses, knowledge, escalations, settings.RETRIEVAL_MIN_SCORE);
   const classifier = new TicketClassifier();
-  const workflow = new AssistanceWorkflow(classifier, tools, new PolicyService(), buildLanguageModel(settings), runs, checkpointer, checkpointerBackend);
+  const workflow = new AssistanceWorkflow(classifier, tools, new PolicyService(), new AutomationService(), buildLanguageModel(settings), runs, checkpointer, checkpointerBackend);
   const rateLimiter = await buildRateLimiter(settings);
   resources.push(rateLimiter);
   return { settings, workflow, runs, tickets, customers, orders, products, knowledge, tools, classifier, metrics: new OperationsMetrics(), rateLimiter, audit: new AuditService(auditRepository), async close() { for (const resource of resources.reverse()) await resource.close(); } };

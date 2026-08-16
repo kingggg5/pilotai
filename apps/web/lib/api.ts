@@ -31,6 +31,7 @@ type ApiTicket = {
   customer_email?: string;
   customer_phone?: string;
   channel: Ticket["channel"];
+  handling_mode?: Ticket["handlingMode"];
   priority: Ticket["priority"];
   status: Ticket["status"];
   confidence: number;
@@ -55,6 +56,8 @@ type ApiRun = {
   draft: string;
   answer?: string;
   policy: { reasons: string[]; risk_level: string };
+  entities?: { order_id?: string | null; refund_id?: string | null; language: "th" | "en"; requested_action: string; missing_fields: string[] };
+  automation?: { handling_mode?: Run["automation"]["handlingMode"]; mode: Run["automation"]["mode"]; assigned_team: string; next_question?: string | null; actions: Run["automation"]["actions"] };
   approval?: { decision?: Decision; reviewer?: string };
   escalation_id?: string;
   provider: string;
@@ -87,7 +90,7 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 function toTicket(ticket: ApiTicket): Ticket {
-  const { customer_id, customer_email, customer_phone, wait_minutes, requested_action, order_id, run_id, assigned_team, created_at, updated_at, ...rest } = ticket;
+  const { customer_id, customer_email, customer_phone, wait_minutes, requested_action, order_id, run_id, assigned_team, handling_mode, created_at, updated_at, ...rest } = ticket;
   return {
     ...rest,
     waitMinutes: wait_minutes,
@@ -98,6 +101,7 @@ function toTicket(ticket: ApiTicket): Ticket {
     customerEmail: customer_email,
     customerPhone: customer_phone,
     assignedTeam: assigned_team,
+    handlingMode: handling_mode ?? "autopilot",
     createdAt: created_at,
     updatedAt: updated_at,
   };
@@ -117,6 +121,7 @@ function toEvidence(item: ApiEvidence): Evidence {
 function toRun(run: ApiRun, ticketId: string): Run {
   const evidence = run.retrieval.documents.map(toEvidence);
   const waiting = run.status === "awaiting_approval";
+  const automation = run.automation ?? { handling_mode: "autopilot", mode: waiting ? "needs_approval" : "auto_routed", assigned_team: "Customer Support", next_question: null, actions: [] };
   return {
     id: run.thread_id,
     ticketId,
@@ -128,6 +133,20 @@ function toRun(run: ApiRun, ticketId: string): Run {
     reviewer: run.approval?.reviewer,
     escalationId: run.escalation_id,
     evidence,
+    entities: {
+      orderId: run.entities?.order_id ?? undefined,
+      refundId: run.entities?.refund_id ?? undefined,
+      language: run.entities?.language ?? "en",
+      requestedAction: run.entities?.requested_action ?? run.classification.category,
+      missingFields: run.entities?.missing_fields ?? [],
+    },
+    automation: {
+      handlingMode: automation.handling_mode ?? "autopilot",
+      mode: automation.mode,
+      assignedTeam: automation.assigned_team,
+      nextQuestion: automation.next_question ?? undefined,
+      actions: automation.actions,
+    },
     ai: {
       category: run.classification.category,
       priority: run.classification.priority,
@@ -140,6 +159,7 @@ function toRun(run: ApiRun, ticketId: string): Run {
     },
     trace: [
       { id: "classify", title: "Classified request", detail: `${run.classification.category} • ${run.classification.priority}`, status: "complete" },
+      { id: "extract", title: "Extracted request data", detail: run.entities?.order_id || run.entities?.refund_id || "No reference found", status: "complete" },
       { id: "retrieve", title: "Checked authorized sources", detail: `${evidence.length} sources`, status: "complete" },
       { id: "policy", title: "Applied policy", detail: run.policy.reasons.join(" ") || "Policy checked", status: "complete" },
       { id: "decision", title: waiting ? "Waiting for human decision" : "Workflow completed", detail: run.status.replaceAll("_", " "), status: waiting ? "active" : "complete" },
@@ -156,6 +176,8 @@ function pendingRun(ticket: Ticket): Run {
     confidence: ticket.confidence,
     draft: "",
     evidence: [],
+    entities: { language: ticket.locale === "th" ? "th" : "en", requestedAction: "pending", missingFields: [] },
+    automation: { handlingMode: ticket.handlingMode, mode: ticket.handlingMode === "manual" ? "manual_queue" : ticket.handlingMode === "copilot" ? "copilot_ready" : "auto_routed", assignedTeam: ticket.assignedTeam, actions: [] },
     ai: { category: ticket.tags[0] || "general", priority: ticket.priority, modelVersion: "pending", provider: "pending", riskLevel: "pending", reasons: [], sufficientEvidence: false, topScore: 0 },
     trace: [{ id: "pending", title: "Workflow queued", detail: "Waiting for processing", status: "active" }],
   };
@@ -197,6 +219,7 @@ function queueParams(offset: number, limit: number, filters: QueueFilters) {
   if (filters.priority) query.set("priority", filters.priority);
   if (filters.status) query.set("status", filters.status);
   if (filters.channel) query.set("channel", filters.channel);
+  if (filters.handlingMode) query.set("handling_mode", filters.handlingMode);
   if (filters.createdFrom) query.set("created_from", filters.createdFrom);
   if (filters.createdTo) query.set("created_to", filters.createdTo);
   return query;
@@ -252,6 +275,7 @@ export async function createTicket(draft: TicketDraft): Promise<TicketWorkItem> 
       customer_id: draft.customerId,
       channel: draft.channel,
       locale: draft.locale,
+      handling_mode: draft.handlingMode,
       idempotency_key: draft.idempotencyKey,
       ...(draft.subject ? { subject: draft.subject } : {}),
       ...(draft.orderId ? { order_id: draft.orderId } : {}),

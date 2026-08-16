@@ -77,7 +77,7 @@ class NaiveBayes<T extends Label> {
   }
 }
 
-const includesAny = (text: string, terms: readonly string[]) => terms.some((term) => text.includes(term));
+const includesAny = (text: string, terms: readonly string[]) => terms.some((term) => text.includes(term.normalize("NFKC").toLocaleLowerCase()));
 
 export class TicketClassifier {
   readonly modelVersion = "ts-char-ngram-naive-bayes-v2";

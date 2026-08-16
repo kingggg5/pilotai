@@ -10,6 +10,7 @@ export const QueueQuery = z.object({
   priority: z.enum(["low", "normal", "high", "urgent", ""]).default(""),
   status: z.enum(["new", "investigating", "needs_approval", "draft_ready", "resolved", ""]).default(""),
   channel: z.enum(["email", "chat", "web", ""]).default(""),
+  handling_mode: z.enum(["manual", "copilot", "autopilot", ""]).default(""),
   created_from: z.string().date().or(z.literal("")).default(""),
   created_to: z.string().date().or(z.literal("")).default(""),
   sort: z.enum(["newest", "oldest", "priority"]).default("newest"),

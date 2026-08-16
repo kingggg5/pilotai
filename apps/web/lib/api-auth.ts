@@ -16,10 +16,12 @@ function jwt(claims: Claims) {
   if (!secret) return undefined;
   const now = Math.floor(Date.now() / 1000);
   const header = base64url({ alg: "HS256", typ: "JWT" });
+  const jwtIssuer = process.env.SERVICEPILOT_JWT_ISSUER ?? "servicepilot";
+  const jwtAudience = process.env.SERVICEPILOT_JWT_AUDIENCE ?? "servicepilot-api";
   const payload = base64url({
     ...claims,
-    iss: process.env.SERVICEPILOT_JWT_ISSUER || "servicepilot",
-    aud: process.env.SERVICEPILOT_JWT_AUDIENCE || "servicepilot-api",
+    iss: jwtIssuer,
+    aud: jwtAudience,
     iat: now,
     exp: now + 5 * 60,
   });
@@ -29,7 +31,7 @@ function jwt(claims: Claims) {
 }
 
 export async function apiHeaders(actor: ApiActor) {
-  const tenantId = process.env.SERVICEPILOT_TENANT_ID || "tenant-local";
+  const tenantId = process.env.SERVICEPILOT_TENANT_ID ?? "tenant-local";
   let claims: Claims;
   if (actor === "admin") {
     const session = await getAdminSession();

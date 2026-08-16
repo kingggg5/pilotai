@@ -18,7 +18,8 @@ export async function registerWorkflowRoutes(app: FastifyInstance, container: Ap
     const actor = principal(request);
     const run = await container.workflow.start({ ...request.body, metadata: { ...request.body.metadata, tenant_id: actor.tenant_id, actor_id: actor.subject, roles: actor.roles } }, actor.tenant_id);
     container.metrics.record(run.status);
-    await container.audit.fromRequest(request, actor, { action: AuditActions.workflowStarted, resourceType: "workflow_run", resourceId: run.thread_id, metadata: { status: run.status, category: run.classification.category } });
+    container.metrics.recordAutomation(run.automation.mode, run.automation.handling_mode);
+    await container.audit.fromRequest(request, actor, { action: AuditActions.workflowStarted, resourceType: "workflow_run", resourceId: run.thread_id, metadata: { status: run.status, category: run.classification.category, handling_mode: run.automation.handling_mode } });
     return run;
   });
 
@@ -38,7 +39,7 @@ export async function registerWorkflowRoutes(app: FastifyInstance, container: Ap
     try {
       const run = await container.workflow.resume(threadId, { ...decision, reviewer: actor.subject }, actor.tenant_id);
       const ticket = await container.tickets.getByRun(threadId, actor.tenant_id);
-      if (ticket) await container.tickets.save({ ...ticket, status: ticketStatus(run.status) }, actor.tenant_id);
+      if (ticket) await container.tickets.save({ ...ticket, status: ticketStatus(run) }, actor.tenant_id);
       container.metrics.resolveApproval();
       await container.audit.fromRequest(request, actor, {
         action: decision.decision === "approve" ? AuditActions.approvalApproved : AuditActions.approvalRejected,

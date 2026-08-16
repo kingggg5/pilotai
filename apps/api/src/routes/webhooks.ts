@@ -19,7 +19,7 @@ export async function registerWebhookRoutes(app: FastifyInstance, container: App
       return reply.code(202).send({ accepted: true, event_id: request.body.event_id, thread_id: existing.run_id });
     }
     const run = await container.workflow.start({ ...request.body.ticket, metadata: { ...request.body.ticket.metadata, tenant_id: request.body.tenant_id, actor_id: "webhook", roles: ["ticket:create"] } }, request.body.tenant_id);
-    const payload = TicketCreateRequest.parse({ message: request.body.ticket.message, subject: request.body.ticket.message.slice(0, 120), customer: request.body.ticket.customer_id ?? "Webhook customer", customer_id: request.body.ticket.customer_id, order_id: request.body.ticket.order_id, locale: request.body.ticket.locale, channel: "web" });
+    const payload = TicketCreateRequest.parse({ message: request.body.ticket.message, subject: request.body.ticket.message.slice(0, 120), customer: request.body.ticket.customer_id ?? "Webhook customer", customer_id: request.body.ticket.customer_id, order_id: request.body.ticket.order_id, locale: request.body.ticket.locale, handling_mode: request.body.ticket.handling_mode, channel: "web" });
     const item = workItem(payload, run);
     await container.tickets.save(item.ticket, request.body.tenant_id, request.body.event_id);
     await container.audit.fromRequest(request, actor, { action: AuditActions.webhookAccepted, resourceType: "webhook_event", resourceId: request.body.event_id, actorType: "service", metadata: { event_type: request.body.event_type, ticket_id: item.ticket.id } });

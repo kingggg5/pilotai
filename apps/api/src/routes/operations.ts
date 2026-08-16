@@ -9,30 +9,32 @@ import { requireRole } from "../security.js";
 import { routeContext } from "./context.js";
 import { QueueQuery, TicketParams } from "./schemas.js";
 
-export function ticketStatus(status: string) {
-  return ({ awaiting_approval: "needs_approval", completed: "draft_ready", needs_evidence: "investigating", refused: "investigating" } as const)[status as "awaiting_approval"] ?? "investigating";
+export function ticketStatus(run: AssistResponse) {
+  if (["auto_completed", "human_completed", "human_rejected"].includes(run.automation.mode)) return "resolved";
+  if (run.automation.mode === "manual_queue") return "new";
+  if (run.automation.mode === "copilot_ready") return "draft_ready";
+  return ({ awaiting_approval: "needs_approval", completed: "draft_ready", needs_evidence: "investigating", refused: "investigating" } as const)[run.status as "awaiting_approval"] ?? "investigating";
 }
 
-function assignedTeam(category: string) {
-  if (category === "purchase") return "Sales & Orders";
-  if (["billing", "refund_request", "refund_status"].includes(category)) return "Billing & Refunds";
-  if (["security", "account_access"].includes(category)) return "Trust & Safety";
-  if (category === "technical") return "Technical Support";
-  return "Customer Support";
+function generatedSubject(run: AssistResponse, reference: string | null, message: string) {
+  const label = ({ order_status: "Order status", refund_status: "Refund status", refund_request: "Refund request", policy: "Policy question", account_access: "Account security", billing: "Billing issue", technical: "Technical issue", purchase: "Purchase request", security: "Blocked request", general: "Customer question" } as const)[run.classification.category];
+  return reference ? `${label} · ${reference}` : message.slice(0, 120);
 }
 
 export function workItem(payload: z.infer<typeof TicketCreateRequest>, run: AssistResponse, reference?: string): TicketWorkItem {
   const now = new Date().toISOString();
+  const linkedReference = payload.order_id ?? run.entities.order_id ?? run.entities.refund_id;
   const ticket = TicketSummary.parse({
     id: `tkt_${run.thread_id}`, reference: reference ?? `SP-${run.thread_id.slice(-6).toUpperCase()}`,
-    subject: payload.subject ?? payload.message.slice(0, 120), customer: payload.customer, customer_id: payload.customer_id,
+    subject: payload.subject ?? generatedSubject(run, linkedReference, payload.message), customer: payload.customer, customer_id: payload.customer_id,
     customer_email: payload.customer_id?.includes("@") ? payload.customer_id : null, customer_phone: null,
     channel: payload.channel, locale: payload.locale,
-    priority: run.classification.priority, status: ticketStatus(run.status), confidence: run.classification.confidence,
+    handling_mode: run.automation.handling_mode,
+    priority: run.classification.priority, status: ticketStatus(run), confidence: run.classification.confidence,
     wait_minutes: 0, summary: payload.message,
-    requested_action: run.classification.category === "purchase" ? "Confirm product availability, price, and payment steps" : run.status === "awaiting_approval" ? "Review and approve proposed escalation" : "Review grounded response",
-    order_id: payload.order_id, assigned_team: assignedTeam(run.classification.category), created_at: now, updated_at: now,
-    tags: [run.classification.category, payload.locale], run_id: run.thread_id,
+    requested_action: run.automation.mode === "manual_queue" ? "Human handling requested" : run.automation.mode === "copilot_ready" ? "Review AI-prepared response" : run.automation.mode === "auto_completed" ? "Completed automatically from verified evidence" : run.automation.next_question ?? (run.status === "awaiting_approval" ? "Review and approve proposed escalation" : "Review AI-prepared response"),
+    order_id: linkedReference, assigned_team: run.automation.assigned_team, created_at: now, updated_at: now,
+    tags: run.automation.tags, run_id: run.thread_id,
   });
   return { ticket, run };
 }
@@ -81,12 +83,19 @@ export async function registerOperationsRoutes(app: FastifyInstance, container: 
         }
       }
     }
-    const run = await container.workflow.start({ message: input.message, customer_id: input.customer_id, order_id: input.order_id, locale: input.locale, metadata: { tenant_id: actor.tenant_id, actor_id: actor.subject, roles: actor.roles, channel: input.channel } }, actor.tenant_id);
+    const run = await container.workflow.start({ message: input.message, customer_id: input.customer_id, order_id: input.order_id, locale: input.locale, handling_mode: input.handling_mode, metadata: { tenant_id: actor.tenant_id, actor_id: actor.subject, roles: actor.roles, channel: input.channel } }, actor.tenant_id);
     container.metrics.record(run.status);
+    container.metrics.recordAutomation(run.automation.mode, run.automation.handling_mode);
     const item = workItem(input, run);
     if (account) item.ticket = TicketSummary.parse({ ...item.ticket, customer_email: account.email, customer_phone: account.phone });
     await container.tickets.save(item.ticket, actor.tenant_id, request.body.idempotency_key);
-    await container.audit.fromRequest(request, actor, { action: AuditActions.ticketCreated, resourceType: "ticket", resourceId: item.ticket.id, metadata: { channel: item.ticket.channel, priority: item.ticket.priority, status: item.ticket.status, category: run.classification.category } });
+    await container.audit.fromRequest(request, actor, { action: AuditActions.ticketCreated, resourceType: "ticket", resourceId: item.ticket.id, metadata: { channel: item.ticket.channel, priority: item.ticket.priority, status: item.ticket.status, category: run.classification.category, handling_mode: run.automation.handling_mode } });
+    await container.audit.fromRequest(request, actor, { action: AuditActions.handlingModeSelected, resourceType: "workflow_run", resourceId: run.thread_id, metadata: { handling_mode: run.automation.handling_mode, ticket_id: item.ticket.id } });
+    await container.audit.record({
+      principal: { ...actor, subject: "servicepilot-automation" }, actorType: "system", action: AuditActions.automationCompleted,
+      resourceType: "ticket", resourceId: item.ticket.id, requestId: request.id,
+      metadata: { handling_mode: run.automation.handling_mode, mode: run.automation.mode, assigned_team: run.automation.assigned_team, action_types: run.automation.actions.map((action) => action.type), evidence_count: run.retrieval.documents.length },
+    });
     return reply.code(201).send(item);
   });
   api.get("/api/v1/tickets", { preHandler: authenticate, schema: { tags: ["operations"], response: { 200: z.object({ items: z.array(TicketSummary) }) } } }, async (request) => {
@@ -101,6 +110,7 @@ export async function registerOperationsRoutes(app: FastifyInstance, container: 
     if (request.query.priority) filters.priority = request.query.priority;
     if (request.query.status) filters.status = request.query.status;
     if (request.query.channel) filters.channel = request.query.channel;
+    if (request.query.handling_mode) filters.handlingMode = request.query.handling_mode;
     if (request.query.created_from) filters.createdFrom = request.query.created_from;
     if (request.query.created_to) filters.createdTo = request.query.created_to;
     const page = await container.tickets.listPage(actor.tenant_id, request.query.limit, request.query.offset, filters);

@@ -27,9 +27,10 @@ const equal = (left: string, right: string) => {
 export function createCustomerToken(profile: Omit<CustomerSession, "tenantId" | "exp">) {
   const key = secret();
   if (!key) throw new Error("Customer authentication is not configured");
+  const tenantId = process.env.SERVICEPILOT_TENANT_ID ?? "tenant-local";
   const session: CustomerSession = {
     ...profile,
-    tenantId: process.env.SERVICEPILOT_TENANT_ID || "tenant-local",
+    tenantId: tenantId,
     exp: Math.floor(Date.now() / 1_000) + CUSTOMER_SESSION_SECONDS,
   };
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");

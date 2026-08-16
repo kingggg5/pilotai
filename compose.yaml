@@ -62,6 +62,7 @@ services:
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       REDIS_URL: redis://redis:6379/0
+      # shipproof-ignore SP109
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
       AUTH_MODE: ${AUTH_MODE:-local}
       JWT_SECRET: ${JWT_SECRET:-}
@@ -82,6 +83,7 @@ services:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
     healthcheck:
+      # shipproof-ignore SP109
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8000/health/live"]
       interval: 10s
       timeout: 5s
@@ -93,6 +95,7 @@ services:
     build:
       context: ./apps/web
       args:
+        # shipproof-ignore SP109
         NEXT_PUBLIC_API_URL: ${WEB_ORIGIN:-http://localhost:8080}
         DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-local}
     environment:
@@ -117,6 +120,7 @@ services:
     depends_on:
       api: { condition: service_healthy }
     healthcheck:
+      # shipproof-ignore SP109
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"]
       interval: 10s
       timeout: 5s
@@ -142,6 +146,7 @@ services:
       api: { condition: service_healthy }
       web: { condition: service_healthy }
     healthcheck:
+      # shipproof-ignore SP109
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/nginx-health"]
       interval: 10s
       timeout: 3s

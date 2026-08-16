@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "eval:classifier": "tsx ../../evals/run-classifier.ts --report ../../evals/classifier-report.json",
+    "eval:automation": "tsx ../../evals/run-automation.ts --report ../../evals/automation-report.json",
     "eval:rag": "tsx ../../evals/run-rag.ts --report ../../evals/rag-report.json",
     "eval:golden": "tsx ../../evals/run-golden.ts --report ../../evals/golden-report.json",
     "mcp": "tsx src/mcp.ts"

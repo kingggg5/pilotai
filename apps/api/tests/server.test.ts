@@ -36,6 +36,17 @@ test("ticket intake is idempotent and queue joins workflow runs", async (context
   assert.ok(queue.json().items[0].run);
 });
 
+test("ticket handling preference is persisted and auditable", async (context) => {
+  const app = await fixture(context);
+  const created = await app.inject({ method: "POST", url: "/api/v1/tickets", headers: { "x-tenant-id": "tenant-mode" }, payload: { message: "Please have a person check this request", customer: "Mali", locale: "en", handling_mode: "manual", channel: "web", idempotency_key: "handling-mode-001" } });
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.json().ticket.handling_mode, "manual");
+  assert.equal(created.json().ticket.status, "new");
+  assert.equal(created.json().run.automation.mode, "manual_queue");
+  const audit = await app.inject({ method: "GET", url: "/api/v1/audit-events?action=workflow.handling_mode_selected", headers: { "x-tenant-id": "tenant-mode" } });
+  assert.equal(audit.json().items[0].metadata.handling_mode, "manual");
+});
+
 test("invalid payloads fail with structured 422", async (context) => {
   const app = await fixture(context);
   const result = await app.inject({ method: "POST", url: "/api/v1/tickets", payload: { message: "x" } });
@@ -54,8 +65,9 @@ test("ticket mutations create tenant-scoped audit events with request correlatio
 
   const audit = await app.inject({ method: "GET", url: "/api/v1/audit-events?limit=10", headers: { "x-tenant-id": "tenant-a" } });
   assert.equal(audit.statusCode, 200);
-  assert.equal(audit.json().items[0].action, "ticket.created");
-  assert.equal(audit.json().items[0].request_id, "request-audit-001");
+  const events = audit.json().items;
+  assert.equal(events.find((event: { action: string }) => event.action === "ticket.created")?.request_id, "request-audit-001");
+  assert.equal(events.find((event: { action: string }) => event.action === "automation.completed")?.actor_type, "system");
   assert.equal(JSON.stringify(audit.json()).includes("Private customer"), false);
 
   const otherTenant = await app.inject({ method: "GET", url: "/api/v1/audit-events", headers: { "x-tenant-id": "tenant-b" } });

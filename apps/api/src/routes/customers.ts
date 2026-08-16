@@ -98,14 +98,16 @@ export async function registerCustomerRoutes(app: FastifyInstance, container: Ap
     const message = request.body.locale === "th"
       ? `ลูกค้าต้องการสั่งซื้อ ${itemText} ยอดรวม ฿${subtotal.toLocaleString("th-TH")} กรุณาตรวจสอบสินค้า ราคา และขั้นตอนชำระเงินก่อนติดต่อกลับ`
       : `Customer wants to purchase ${itemText}, subtotal THB ${subtotal.toLocaleString("en-US")}. Please verify availability, price, and payment steps before contacting the customer.`;
-    const run = await container.workflow.start({ message, customer_id: account.id, order_id: orderId, locale: request.body.locale, metadata: { tenant_id: actor.tenant_id, actor_id: actor.subject, roles: actor.roles, channel: "web", purchase: true, item_count: lines.length } }, actor.tenant_id);
+    const run = await container.workflow.start({ message, customer_id: account.id, order_id: orderId, locale: request.body.locale, handling_mode: "copilot", metadata: { tenant_id: actor.tenant_id, actor_id: actor.subject, roles: actor.roles, channel: "web", purchase: true, item_count: lines.length } }, actor.tenant_id);
     container.metrics.record(run.status);
+    container.metrics.recordAutomation(run.automation.mode, run.automation.handling_mode);
     const item = workItem(TicketCreateRequest.parse({
-      message, customer: account.name, customer_id: account.id, channel: "web", locale: request.body.locale, order_id: orderId,
+      message, customer: account.name, customer_id: account.id, channel: "web", locale: request.body.locale, handling_mode: "copilot", order_id: orderId,
       subject: request.body.locale === "th" ? `คำขอซื้อสินค้า ${orderId}` : `Purchase request ${orderId}`,
     }), run, orderId);
     item.ticket = TicketSummary.parse({ ...item.ticket, customer_email: account.email, customer_phone: account.phone, amount: `THB ${subtotal.toLocaleString("en-US")}`, assigned_team: "Sales & Orders", tags: [...item.ticket.tags, "purchase", "ai-triage"] });
     await container.tickets.save(item.ticket, actor.tenant_id, idempotencyKey ? `purchase:${idempotencyKey}` : null);
+    await container.audit.record({ principal: { ...actor, subject: "servicepilot-automation" }, actorType: "system", action: AuditActions.automationCompleted, resourceType: "ticket", resourceId: item.ticket.id, requestId: request.id, metadata: { handling_mode: run.automation.handling_mode, mode: run.automation.mode, assigned_team: item.ticket.assigned_team, action_types: run.automation.actions.map((action) => action.type) } });
     const now = new Date().toISOString();
     const order = OrderRecord.parse({ id: orderId, customer_id: account.id, customer_name: account.name, customer_email: account.email, customer_phone: account.phone, items: lines, subtotal, currency: "THB", status: "pending_review", ticket_id: item.ticket.id, ai_provider: run.provider, ai_category: run.classification.category, ai_priority: run.classification.priority, ai_confidence: run.classification.confidence, created_at: now, updated_at: now });
     await container.orders.save(order, actor.tenant_id, idempotencyKey);

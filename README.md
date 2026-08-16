@@ -31,6 +31,8 @@ The storefront reads product names, prices, source links, and image paths from P
 - Retrieves policy evidence with PostgreSQL full-text search, pgvector, and reranking.
 - Returns page-level citations and refuses to invent an answer when evidence is weak.
 - Runs read-only tools automatically: `get_order_status`, `check_refund_status`, and `search_policy`.
+- Lets each customer choose staff-only handling, AI copilot, or bounded AI autopilot for every support request.
+- Extracts order/refund references, asks for missing information, routes the ticket, sets priority/tags, and auto-resolves verified low-risk requests.
 - Pauses write actions such as `create_escalation` until a human approves them.
 - Exposes REST/OpenAPI as the primary interface with a thin MCP adapter.
 - Records tenant-scoped, PII-redacted, append-only audit events.
@@ -59,8 +61,11 @@ Business rules live in services and the workflow layer, not in route handlers or
 ```mermaid
 flowchart TD
     A["Customer message or purchase request"] --> B["Auth, validation, tenant scope, rate limit"]
-    B --> C["Ticket classification<br/>Traditional ML"]
-    C --> D{"Request type"}
+    B --> Q{"Handling mode"}
+    Q -->|"Staff"| R["Human queue<br/>No AI business-tool call"]
+    Q -->|"Copilot or autopilot"| C["Ticket classification<br/>Traditional ML"]
+    C --> X["Extract references and missing fields"]
+    X --> D{"Request type"}
     D -->|"Order or refund status"| E["Read-only PostgreSQL tool"]
     D -->|"Policy or support question"| F["Hybrid document retrieval"]
     E --> G{"Verified evidence sufficient?"}
@@ -69,14 +74,17 @@ flowchart TD
     G -->|"Yes"| I["Draft answer<br/>Optional generative AI"]
     I --> J["Deterministic policy check"]
     J -->|"Blocked"| K["Refuse safely"]
-    J -->|"Read-only"| L["Return answer with citation"]
+    J -->|"Read-only"| V{"Selected mode"}
+    V -->|"Copilot"| U["Prepare evidence and draft for staff"]
+    V -->|"Autopilot"| L["Return answer with citation"]
+    L --> P["Auto-resolve ticket and audit"]
     J -->|"Write or high risk"| M["Pause for human approval"]
     M -->|"Reject"| N["No side effect"]
     M -->|"Approve"| O["Create escalation and audit event"]
 
     classDef ai fill:#d8ffb7,stroke:#4d8f1f,color:#0a0a08,stroke-width:2px;
     classDef human fill:#fff2b8,stroke:#9c6f00,color:#0a0a08,stroke-width:2px;
-    class C,I ai;
+    class C,I,U ai;
     class M human;
 ```
 
@@ -93,7 +101,7 @@ Green nodes use AI or machine learning. The approval node is a human decision. E
 | Escalation/write action | No autonomous AI | A human must approve before the repository write runs |
 | Auth, rate limiting, audit, metrics | No | Deterministic infrastructure and application controls |
 
-The language model never authorizes a write action, chooses tenant access, or bypasses the evidence threshold. See [AI flow and trust boundaries](./docs/ai-flow.md) for the full execution contract.
+The selected handling mode is persisted with the ticket and audit trail. It never weakens policy: the language model cannot authorize a write action, choose tenant access, or bypass the evidence threshold. See [AI flow and trust boundaries](./docs/ai-flow.md) for the full execution contract.
 
 ## Technology stack
 
@@ -131,10 +139,13 @@ compose.production.yaml production secrets and resource limits
 
 ## Quick start
 
+The project commands use a small Node.js CLI, so the same workflow works on Windows, macOS, and Linux. PowerShell files under `scripts/` remain only as legacy compatibility wrappers; new automation should use `npm run`.
+
 ### Requirements
 
-- Windows 10/11 with PowerShell 7
-- Docker Desktop with Docker Compose v2
+- Node.js 22 or newer and npm
+- Docker Desktop or Docker Engine with Docker Compose v2
+- Windows, macOS, or Linux
 - At least 4 GB of available RAM and 6 GB of free disk space
 
 ### 1. Configure the local environment
@@ -148,13 +159,13 @@ The default `AI_MODE=local` keeps customer messages on the machine and does not 
 ### 2. Start the stack
 
 ```powershell
-./scripts/dev.ps1
+npm run dev
 ```
 
 Use a different port when 8080 is occupied:
 
 ```powershell
-./scripts/dev.ps1 -Port 8180
+npm run dev -- --port 8180
 ```
 
 Docker Compose runs the PostgreSQL migration before the API and waits for the PostgreSQL, Redis, API, Web, and Nginx health checks. Do not delete volumes to repair a migration; add an idempotent migration and preserve the data.
@@ -212,7 +223,7 @@ Read-only actions can run automatically. Write actions have no side effect befor
 Run the complete release check:
 
 ```powershell
-./scripts/check.ps1
+npm run check
 ```
 
 It runs:
@@ -235,6 +246,14 @@ The local gate is inspired by [CodeVibes](https://github.com/danish296/codevibes
 
 Evaluation reports include Macro-F1, precision, recall, confusion data, Recall@K, MRR, citation accuracy, and workflow policy checks. Synthetic classifier scores are regression signals, not substitutes for a de-identified production dataset with time-based splits and per-class support review.
 
+## AI roadmap
+
+The first automation increment now adds a per-ticket Staff / Copilot / Autopilot choice, extracts references, asks missing-information questions, routes teams, sets priority/tags, records mode and automation audit events, and auto-resolves only low-risk requests backed by verified evidence. The next improvements are grounded staff summaries, duplicate detection, reviewer feedback, and production cost/latency monitoring. The model never chooses tenant access or authorizes a high-risk write. See [the AI roadmap](./docs/ai-roadmap.md) and run the baseline with:
+
+```sh
+npm run ai:eval
+```
+
 ## Production deployment
 
 Place a managed load balancer, ingress, or CDN with TLS in front of Nginx. Inside Compose, only Nginx publishes a port; PostgreSQL, Redis, API, and Web stay on private networks.
@@ -242,10 +261,7 @@ Place a managed load balancer, ingress, or CDN with TLS in front of Nginx. Insid
 ### 1. Generate production configuration and secrets
 
 ```powershell
-./scripts/init-production.ps1 `
-  -PublicOrigin "https://support.example.com" `
-  -TenantId "tenant-company" `
-  -Port 8080
+npm run init:production -- --origin https://support.example.com --tenant tenant-company --port 8080
 ```
 
 The script prompts securely for the OpenAI key and creates:
@@ -266,13 +282,13 @@ Never send credentials through chat or include them in screenshots.
 ### 2. Deploy
 
 ```powershell
-./scripts/deploy.ps1
+npm run deploy
 ```
 
 Enable the OpenTelemetry collector profile when required:
 
 ```powershell
-./scripts/deploy.ps1 -Observability
+npm run deploy -- --observability
 ```
 
 ### 3. Verify
@@ -319,10 +335,10 @@ Define backup schedules, retention, encryption, off-site copies, and tested RPO/
 
 Before an upgrade:
 
-1. Run `./scripts/check.ps1`.
+1. Run `npm run check`.
 2. Back up PostgreSQL and deployment secrets.
 3. Create a Git tag/release and update `DEPLOYMENT_VERSION`.
-4. Run `./scripts/deploy.ps1`.
+4. Run `npm run deploy`.
 5. Verify health, error rate, latency, and one real ticket journey.
 
 To roll back, check out the previous release, restore the backup when a migration is not backward compatible, and deploy again. Never delete named volumes as a recovery shortcut.
@@ -347,7 +363,7 @@ See [the architecture and threat model](./docs/architecture.md) for detailed des
 The target repository is [kingggg5/pilotai](https://github.com/kingggg5/pilotai). Before every push:
 
 ```powershell
-./scripts/check.ps1
+npm run check
 git status --ignored
 ```
 

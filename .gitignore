@@ -6,6 +6,7 @@
 .impeccable/critique/
 backups/
 work/
+evals/*-report.json
 *.pem
 *.key
 *.p12

@@ -1,0 +1,18 @@
+{
+  "name": "servicepilot-ai",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "node scripts/servicepilot.mjs dev",
+    "help": "node scripts/servicepilot.mjs help",
+    "check": "node scripts/servicepilot.mjs check",
+    "quality": "node scripts/servicepilot.mjs quality",
+    "ai:eval": "node scripts/servicepilot.mjs ai-eval",
+    "init:production": "node scripts/servicepilot.mjs init-production",
+    "deploy": "node scripts/servicepilot.mjs deploy"
+  }
+}

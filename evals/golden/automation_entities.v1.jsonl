@@ -1,0 +1,6 @@
+{"id":"en-order-reference","input":{"message":"Where is order ORD-1042?","locale":"en"},"expected":{"order_id":"ORD-1042","refund_id":null,"language":"en","missing_fields":[]}}
+{"id":"th-order-reference","input":{"message":"ช่วยเช็กสถานะคำสั่งซื้อ SO-8821 ให้หน่อยค่ะ","locale":"th"},"expected":{"order_id":"SO-8821","refund_id":null,"language":"th","missing_fields":[]}}
+{"id":"en-refund-reference","input":{"message":"Has refund RF-3308 reached my card yet?","locale":"en"},"expected":{"order_id":null,"refund_id":"RF-3308","language":"en","missing_fields":[]}}
+{"id":"en-missing-order","input":{"message":"Where is my order?","locale":"en"},"expected":{"order_id":null,"refund_id":null,"language":"en","missing_fields":["order_id"]}}
+{"id":"th-missing-order","input":{"message":"สถานะคำสั่งซื้อของฉันเป็นอย่างไร","locale":"auto"},"expected":{"order_id":null,"refund_id":null,"language":"th","missing_fields":["order_id"]}}
+{"id":"en-policy-no-reference","input":{"message":"What is the return window for an unopened appliance?","locale":"en"},"expected":{"order_id":null,"refund_id":null,"language":"en","missing_fields":[]}}

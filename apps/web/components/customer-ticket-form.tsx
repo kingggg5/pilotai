@@ -139,7 +139,6 @@ export function CustomerTicketForm({ language, copy, profile, initialMessage = "
         </label>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <button className="primary-button" disabled={pending} type="submit">{pending ? copy.customer.sending : copy.customer.send}<span aria-hidden="true">→</span></button>
-        <p className="form-assurance"><span aria-hidden="true">●</span>{copy.customer.safe}</p>
       </form>
     </section>
   );

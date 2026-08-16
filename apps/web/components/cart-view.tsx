@@ -30,15 +30,35 @@ export function CartView({ language, copy, signedIn, products }: { language: Lan
       router.push(`/account/login?lang=${language}&next=%2Fcart`);
       return;
     }
-    setBuying(true); setNotice(null);
+    setBuying(true);
+    setNotice(null);
     try {
-      const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locale: language, items: lines.map(({ product, quantity }) => ({ productId: product.id, quantity })) }) });
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locale: language,
+          items: lines.map(({ product, quantity }) => ({ productId: product.id, quantity }))
+        })
+      });
       const payload = await response.json() as { ok?: boolean; purchase?: { orderId: string }; message?: string };
-      if (!response.ok || !payload.purchase) throw new Error(payload.message || copy.commerce.buyError);
-      setOrderId(payload.purchase.orderId); clearCart(); setNotice({ tone: "success", message: copy.commerce.buySuccess.replace("{orderId}", payload.purchase.orderId) });
-    } catch {
-      setNotice({ tone: "error", message: copy.commerce.buyError });
-    } finally { setBuying(false); }
+      if (!response.ok || !payload.purchase) {
+        if (response.status === 401) {
+          setNotice({ tone: "info", message: copy.commerce.signInToBuy });
+          router.push(`/account/login?lang=${language}&next=%2Fcart`);
+          return;
+        }
+        throw new Error(payload.message || copy.commerce.buyError);
+      }
+      setOrderId(payload.purchase.orderId);
+      clearCart();
+      setNotice({ tone: "success", message: copy.commerce.buySuccess.replace("{orderId}", payload.purchase.orderId) });
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : copy.commerce.buyError;
+      setNotice({ tone: "error", message });
+    } finally {
+      setBuying(false);
+    }
   }
 
   if (!lines.length) {
@@ -67,7 +87,10 @@ export function CartView({ language, copy, signedIn, products }: { language: Lan
             <button className="remove-button" type="button" onClick={() => { setCartQuantity(product.id, 0); setNotice({ tone: "success", message: copy.commerce.itemRemoved }); }}>{copy.commerce.remove}</button>
           </article>
         ))}
-        <div className="cart-list-actions"><Link href={`/?lang=${language}`}>← {copy.commerce.continueShopping}</Link><button type="button" onClick={() => { clearCart(); setNotice({ tone: "success", message: copy.commerce.cartCleared }); }}>{copy.commerce.clear}</button></div>
+        <div className="cart-list-actions">
+          <Link className="secondary-button" href={`/?lang=${language}`}>← {copy.commerce.continueShopping}</Link>
+          <button className="secondary-button" type="button" onClick={() => { clearCart(); setNotice({ tone: "success", message: copy.commerce.cartCleared }); }}>{copy.commerce.clear}</button>
+        </div>
       </section>
       <aside className="cart-summary">
         <div><span>{copy.commerce.subtotal}</span><strong>{formatThb(total, language)}</strong></div>

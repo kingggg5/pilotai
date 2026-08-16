@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ActionToast, type Notice } from "@/components/action-toast";
 import { postJson } from "@/lib/browser-api";
 import { localizePriority, localizeStatus, type Copy } from "@/lib/i18n";
-import { queuePageUrl } from "@/lib/queue-filters";
+import { queueDataUrl, queuePageUrl } from "@/lib/queue-filters";
 import type { ConsoleData, Decision, Language, Priority, QueueFilters, Run, Ticket, TicketStatus } from "@/lib/types";
 
 const teams = ["Customer Support", "Sales & Orders", "Billing & Refunds", "Technical Support", "Trust & Safety"];
@@ -19,15 +19,61 @@ type NoticeUpdate = (notice: Notice) => void;
 
 export function AdminWorkspace({ initialData, copy, language, filters }: { initialData: ConsoleData; copy: Copy; language: Language; filters: QueueFilters }) {
 	const router = useRouter();
-	const [tickets, setTickets] = useState(initialData.tickets);
-	const [runs, setRuns] = useState(initialData.runs);
+	const [data, setData] = useState(initialData);
 	const [selectedId, setSelectedId] = useState(initialData.tickets[0]?.id || "");
 	const [note, setNote] = useState("");
 	const [pending, setPending] = useState<Decision>();
 	const [error, setError] = useState("");
 	const [notice, setNotice] = useState<Notice | null>(null);
+	const [incoming, setIncoming] = useState<Ticket[]>([]);
+	const [refreshing, setRefreshing] = useState(false);
+	const [refreshError, setRefreshError] = useState(false);
+	const seenIds = useRef(new Set(initialData.tickets.map((ticket) => ticket.id)));
+	const refreshInFlight = useRef(false);
+	const tickets = data.tickets;
+	const runs = data.runs;
 	const selected = tickets.find((ticket) => ticket.id === selectedId) || tickets[0];
 	const run = selected ? runs[selected.id] : undefined;
+
+	const refreshQueue = useCallback(async (announce = false) => {
+		if (refreshInFlight.current) return;
+		refreshInFlight.current = true;
+		setRefreshing(true);
+		try {
+			const response = await fetch(queueDataUrl(filters, data.offset, data.limit), { cache: "no-store", signal: AbortSignal.timeout(10_000) });
+			if (!response.ok) throw new Error("Queue refresh failed");
+			const next = await response.json() as ConsoleData;
+			if (next.source !== "live") throw new Error(next.loadError || "Queue refresh failed");
+			setRefreshError(false);
+			const fresh = next.tickets.filter((ticket) => !seenIds.current.has(ticket.id));
+			next.tickets.forEach((ticket) => seenIds.current.add(ticket.id));
+			if (fresh.length) {
+				const chats = fresh.filter((ticket) => ticket.channel === "chat" && ticket.status !== "resolved");
+				if (chats.length) {
+					setIncoming((current) => {
+						const existing = new Set(current.map((ticket) => ticket.id));
+						return [...current, ...chats.filter((ticket) => !existing.has(ticket.id))];
+					});
+					setNotice({ tone: "info", message: `${chats.length} ${copy.admin.newChat}` });
+				}
+			}
+			setData(next);
+			setSelectedId((current) => next.tickets.some((ticket) => ticket.id === current) ? current : next.tickets[0]?.id || "");
+		} catch (reason) {
+			setRefreshError(true);
+			if (announce) setNotice({ tone: "error", message: reason instanceof Error ? reason.message : copy.admin.refreshFailed });
+		} finally {
+			refreshInFlight.current = false;
+			setRefreshing(false);
+		}
+	}, [copy.admin.newChat, copy.admin.refreshFailed, data.limit, data.offset, filters]);
+
+	useEffect(() => {
+		const timer = window.setInterval(() => {
+			if (document.visibilityState === "visible") void refreshQueue();
+		}, 15_000);
+		return () => window.clearInterval(timer);
+	}, [refreshQueue]);
 
 	async function decide(decision: Decision) {
 		if (!run || !selected) return;
@@ -38,9 +84,10 @@ export function AdminWorkspace({ initialData, copy, language, filters }: { initi
 			const payload = await postJson<{ run?: Run }>("/api/decision", { runId: run.id, decision, note });
 			if (!payload.run) throw new Error("Decision failed");
 
-			setRuns((current) => ({ ...current, [selected.id]: payload.run! }));
+			setData((current) => ({ ...current, runs: { ...current.runs, [selected.id]: payload.run! } }));
 			setNote("");
 			setNotice({ tone: "success", message: decision === "approve" ? copy.admin.approved : copy.admin.rejected });
+			void refreshQueue();
 		} catch (reason) {
 			const message = reason instanceof Error ? reason.message : "Decision failed";
 			setError(message);
@@ -50,36 +97,42 @@ export function AdminWorkspace({ initialData, copy, language, filters }: { initi
 		}
 	}
 
-	if (initialData.source === "unavailable") {
-		return <main className="admin-empty"><strong>{copy.admin.unavailable}</strong><p>{initialData.loadError}</p><button className="primary-button" type="button" onClick={() => router.refresh()}>{copy.admin.retry}</button></main>;
+	if (data.source === "unavailable") {
+		return <main className="admin-empty"><strong>{copy.admin.unavailable}</strong><p>{data.loadError}</p><button className="primary-button" type="button" onClick={() => router.refresh()}>{copy.admin.retry}</button></main>;
 	}
 
 	return (
 		<main className="admin-shell">
-			<AiPulse data={initialData} copy={copy} />
+			<AiPulse data={data} copy={copy} />
+			{incoming.length ? <IncomingChatBanner chats={incoming} copy={copy} onOpen={() => { setSelectedId(incoming[0].id); setIncoming([]); setNotice(null); }} /> : null}
+			<div className="queue-refresh-bar"><span className={refreshError ? "queue-refresh-error" : undefined} aria-live="polite">{refreshing ? copy.admin.refreshing : refreshError ? copy.admin.refreshFailed : `${copy.admin.refreshed} ${new Date(data.checkedAt).toLocaleTimeString(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit" })}`}</span><button type="button" onClick={() => void refreshQueue(true)} disabled={refreshing}>{refreshing ? "…" : copy.admin.refreshQueue}</button></div>
 			<QueueFilters copy={copy} language={language} filters={filters} />
 			<div className="admin-workspace">
 				<aside className="queue-pane" aria-label={copy.admin.queue}>
-					<div className="queue-title"><div><span className="live-dot" />{copy.admin.live}</div><strong>{initialData.total}</strong></div>
-					<p className="queue-result-label">{initialData.total} {copy.admin.results}</p>
-					<div className="ticket-list">
+					<div className="queue-title"><div><span className="live-dot" />{copy.admin.live}</div><strong>{data.total}</strong></div>
+					<p className="queue-result-label">{data.total} {copy.admin.results}</p>
+					<div className="ticket-list" aria-busy={refreshing}>
 						{tickets.length ? tickets.map((ticket) => (
 							<button key={ticket.id} type="button" aria-pressed={selected?.id === ticket.id} onClick={() => setSelectedId(ticket.id)}>
 								<span className={`priority-mark priority-${ticket.priority}`} />
-								<span><small>{ticket.reference} · {localizePriority(copy, ticket.priority)}{ticket.tags.includes("purchase") ? ` · ${copy.admin.purchase}` : ""}</small><strong>{ticket.subject}</strong><em>{ticket.customer} · {ticket.channel}{ticket.amount ? ` · ${ticket.amount}` : ""}</em></span>
+								<span><small>{ticket.reference} · {localizePriority(copy, ticket.priority)}{ticket.tags.includes("purchase") ? ` · ${copy.admin.purchase}` : ""}</small><strong>{ticket.subject}</strong><em>{ticket.customer} · {ticket.channel.toUpperCase()}{ticket.amount ? ` · ${ticket.amount}` : ""}</em></span>
 								<b>{new Date(ticket.createdAt).toLocaleDateString(language === "th" ? "th-TH" : "en-GB", { day: "2-digit", month: "short" })}</b>
 							</button>
 						)) : <p className="empty-copy">{copy.admin.empty}</p>}
 					</div>
-					<Pagination data={initialData} filters={filters} language={language} />
+					<Pagination data={data} filters={filters} language={language} />
 				</aside>
 				<section className="ticket-pane">
-					{selected && run ? <TicketWorkspace ticket={selected} run={run} copy={copy} language={language} note={note} setNote={setNote} pending={pending} error={error} decide={decide} onTicket={(ticket) => setTickets((current) => current.map((item) => item.id === ticket.id ? ticket : item))} onNotice={setNotice} /> : <p className="empty-copy">{copy.admin.empty}</p>}
+					{selected && run ? <TicketWorkspace ticket={selected} run={run} copy={copy} language={language} note={note} setNote={setNote} pending={pending} error={error} decide={decide} onTicket={(ticket) => setData((current) => ({ ...current, tickets: current.tickets.map((item) => item.id === ticket.id ? ticket : item) }))} onNotice={setNotice} /> : <p className="empty-copy">{copy.admin.empty}</p>}
 				</section>
 			</div>
 			<ActionToast notice={notice} onDismiss={() => setNotice(null)} dismissLabel={copy.commerce.dismiss} />
 		</main>
 	);
+}
+
+function IncomingChatBanner({ chats, copy, onOpen }: { chats: Ticket[]; copy: Copy; onOpen: () => void }) {
+	return <section className="incoming-chat-banner" role="status" aria-live="polite"><span className="incoming-chat-mark" aria-hidden="true" /><div><strong>{chats.length} {copy.admin.newChat}</strong><p>{chats[0]?.customer} · {chats[0]?.subject}</p></div><button type="button" onClick={onOpen}>{copy.admin.openChat}</button></section>;
 }
 
 function AiPulse({ data, copy }: { data: ConsoleData; copy: Copy }) {
@@ -121,25 +174,52 @@ function TicketWorkspace({ ticket, run, copy, language, note, setNote, pending, 
 	return (
 		<>
 			<header className="ticket-header">
-				<div><span>{ticket.reference}</span><h2>{ticket.subject}</h2><p>{ticket.summary}</p></div>
+				<div><span>{ticket.reference}</span><h2>{ticket.subject}</h2><p>{ticket.channel === "chat" ? `${ticket.customer} · ${copy.admin.conversation}` : ticket.summary}</p></div>
 				<span className={`state-badge state-${ticket.status}`}>{localizeStatus(copy, ticket.status)}</span>
 			</header>
 			<TicketOverview ticket={ticket} run={run} copy={copy} language={language} />
 			<div className="admin-columns">
 				<div className="work-column">
-					<section className="work-section request-section"><span className="section-label">{copy.admin.fullRequest}</span><h3>{copy.admin.subject}</h3><p>{ticket.summary}</p></section>
-					<DraftCard run={run} copy={copy} onNotice={onNotice} />
+					{ticket.channel === "chat" ? <AdminChatPreview ticket={ticket} run={run} copy={copy} onNotice={onNotice} /> : <section className="work-section request-section"><span className="section-label">{copy.admin.fullRequest}</span><h3>{copy.admin.subject}</h3><p>{ticket.summary}</p></section>}
+					{ticket.channel === "chat" ? null : <DraftCard run={run} copy={copy} onNotice={onNotice} />}
 					<EvidenceCard run={run} copy={copy} />
 				</div>
 				<aside className="decision-column">
 					<ApprovalCard ticket={ticket} run={run} copy={copy} note={note} setNote={setNote} pending={pending} error={error} decide={decide} />
 					<AiReview run={run} copy={copy} />
 					<AutomationCard run={run} copy={copy} />
-					<TicketControls key={ticket.id} ticket={ticket} copy={copy} onTicket={onTicket} onNotice={onNotice} />
+					<TicketControls key={`${ticket.id}-${ticket.status}-${ticket.priority}-${ticket.assignedTeam}`} ticket={ticket} copy={copy} onTicket={onTicket} onNotice={onNotice} />
 					<WorkflowTrace run={run} copy={copy} />
 				</aside>
 			</div>
 		</>
+	);
+}
+
+function AdminChatPreview({ ticket, run, copy, onNotice }: { ticket: Ticket; run: Run; copy: Copy; onNotice: NoticeUpdate }) {
+	const [copied, setCopied] = useState(false);
+	const response = run.draft || run.recommendation || copy.admin.noEvidence;
+
+	async function copyResponse() {
+		try {
+			await navigator.clipboard.writeText(response);
+			setCopied(true);
+			onNotice({ tone: "success", message: copy.admin.copied });
+			window.setTimeout(() => setCopied(false), 1_500);
+		} catch {
+			onNotice({ tone: "error", message: copy.admin.copyFailed });
+		}
+	}
+
+	return (
+		<section className="work-section admin-chat-preview" aria-label={copy.admin.conversation}>
+			<div className="section-heading"><div><span className="section-label">{copy.admin.conversation}</span><h3>{ticket.customer}</h3></div><span className="channel-badge">CHAT</span></div>
+			<div className="admin-chat-thread">
+				<article className="admin-chat-bubble admin-chat-customer"><small>{copy.admin.customerMessage} · {ticket.reference}</small><p>{ticket.summary}</p></article>
+				<article className="admin-chat-bubble admin-chat-ai"><small>{copy.admin.aiDraft} · {run.ai.provider}</small><p>{response}</p></article>
+			</div>
+			<footer className="admin-chat-footer"><small>{copy.admin.draftNotSent}</small><button type="button" onClick={copyResponse}>{copied ? copy.admin.copied : copy.admin.copyDraft}</button></footer>
+		</section>
 	);
 }
 

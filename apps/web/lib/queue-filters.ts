@@ -38,3 +38,16 @@ export function queuePageUrl(language: Language, filters: QueueFilters, page = 1
 	if (page > 1) query.set("page", String(page));
 	return `/admin?${query}`;
 }
+
+export function queueDataUrl(filters: QueueFilters, offset = 0, limit = 50) {
+	const query = new URLSearchParams({ offset: String(offset), limit: String(limit), sort: filters.sort });
+	if (filters.query) query.set("q", filters.query);
+	if (filters.number) query.set("number", filters.number);
+	if (filters.priority) query.set("priority", filters.priority);
+	if (filters.status) query.set("status", filters.status);
+	if (filters.channel) query.set("channel", filters.channel);
+	if (filters.handlingMode) query.set("handling", filters.handlingMode);
+	if (filters.createdFrom) query.set("from", filters.createdFrom);
+	if (filters.createdTo) query.set("to", filters.createdTo);
+	return `/api/admin/queue?${query}`;
+}

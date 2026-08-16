@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { parseDecision, parseTicketDraft } from "../lib/validation.ts";
 import { auditPageUrl, parseAuditFilters } from "../lib/audit-filters.ts";
-import { parseQueueFilters, queuePageUrl } from "../lib/queue-filters.ts";
+import { parseQueueFilters, queueDataUrl, queuePageUrl } from "../lib/queue-filters.ts";
 
 const draft = parseTicketDraft({
 	message: "Where is my order?",
@@ -27,5 +27,6 @@ assert.deepEqual(parseAuditFilters({ action: "unknown", outcome: "unknown" }).fi
 const queue = parseQueueFilters({ q: " refund ", number: " ORD-1001 ", priority: "urgent", status: "investigating", channel: "email", handling: "autopilot", from: "2026-08-01", to: "2026-08-14", sort: "priority" });
 assert.deepEqual(queue, { query: "refund", number: "ORD-1001", priority: "urgent", status: "investigating", channel: "email", handlingMode: "autopilot", createdFrom: "2026-08-01", createdTo: "2026-08-14", sort: "priority" });
 assert.equal(queuePageUrl("en", queue, 2), "/admin?lang=en&q=refund&number=ORD-1001&priority=urgent&status=investigating&channel=email&handling=autopilot&from=2026-08-01&to=2026-08-14&sort=priority&page=2");
+assert.equal(queueDataUrl(queue, 50, 25), "/api/admin/queue?offset=50&limit=25&sort=priority&q=refund&number=ORD-1001&priority=urgent&status=investigating&channel=email&handling=autopilot&from=2026-08-01&to=2026-08-14");
 
 console.log("validation contracts passed");

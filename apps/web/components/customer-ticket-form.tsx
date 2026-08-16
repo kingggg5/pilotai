@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { postJson } from "@/lib/browser-api";
 import { localizeStatus, type Copy } from "@/lib/i18n";
@@ -16,10 +16,10 @@ type ChatMessage = {
 };
 
 function orderIdFrom(text: string) {
-	const match = text.match(/\b(?:ORD|ORDER)[-\s]?[A-Z0-9]{4,}\b/i);
+	const match = text.match(/\b(?:ORD|ORDER|SO)[-\s]?[A-Z0-9]{4,}\b/i);
 	if (!match) return undefined;
 
-	return match[0].replace(/^ORDER[-\s]?/i, "ORD-").toUpperCase();
+	return match[0].replace(/^ORDER[-\s]?/i, "ORD-").replace(/\s+/g, "-").toUpperCase();
 }
 
 function requestsStaff(text: string) {
@@ -48,6 +48,12 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState("");
 	const idempotencyKey = useRef(crypto.randomUUID());
+	const logRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+		logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior });
+	}, [messages, pending]);
 
 	async function sendMessage(value: string, handlingMode?: HandlingMode) {
 		if (pending) return;
@@ -110,7 +116,7 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 				<div><p className="section-label">{copy.customer.chatTitle}</p><h2 id="chat-title">{copy.customer.chatIntro}</h2></div>
 				<span className="chat-status"><i />{language === "th" ? "AI พร้อมช่วย" : "AI is ready"}</span>
 			</header>
-			<div className="chat-log" role="log" aria-live="polite" aria-relevant="additions" aria-busy={pending} aria-label={copy.customer.chatTitle}>
+			<div ref={logRef} className="chat-log" role="log" aria-live="polite" aria-relevant="additions" aria-busy={pending} aria-label={copy.customer.chatTitle}>
 				{messages.map((message) => <ChatMessageView key={message.id} message={message} copy={copy} />)}
 			</div>
 			<div className="chat-quick-actions" aria-label={language === "th" ? "ตัวเลือกด่วน" : "Quick actions"}>
@@ -124,7 +130,7 @@ export function LiveSupportChat({ language, copy, profile, initialMessage = "" }
 				<div className="chat-composer-footer"><small>{draft.length.toLocaleString()} / 8,000 · {language === "th" ? "กด Enter เพื่อส่ง · Shift + Enter ขึ้นบรรทัดใหม่" : "Enter to send · Shift + Enter for a new line"}</small><button className="primary-button" disabled={pending || draft.trim().length < 3} type="submit">{pending ? copy.customer.chatTyping : copy.customer.chatSend}<span aria-hidden="true">→</span></button></div>
 				{error ? <p className="form-error" role="alert">{error}</p> : null}
 			</form>
-			<button className="chat-reset" type="button" onClick={reset}>{copy.customer.chatNew}</button>
+			<button className="chat-reset" type="button" disabled={pending} onClick={reset}>{copy.customer.chatNew}</button>
 		</section>
 	);
 }

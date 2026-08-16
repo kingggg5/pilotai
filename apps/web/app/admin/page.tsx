@@ -28,8 +28,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 	return (
 		<div className="admin-page">
 			<AdminHeader copy={copy} language={language} current="queue" />
-			<section className="admin-heading"><div><h1>{copy.admin.title}</h1><p>{copy.admin.subtitle}</p></div><span><i />{copy.admin.refreshed} {new Date(data.checkedAt).toLocaleTimeString(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit" })}</span></section>
-			<AdminWorkspace initialData={data} copy={copy} language={language} filters={filters} />
+			<section className="admin-heading"><div><h1>{copy.admin.title}</h1><p>{copy.admin.subtitle}</p></div><span><i />{copy.admin.live}</span></section>
+			<AdminWorkspace key={`${page}-${data.checkedAt}`} initialData={data} copy={copy} language={language} filters={filters} />
 		</div>
 	);
 }

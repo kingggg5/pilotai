@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [main, king-dev]
+    branches: [main]
 
 permissions:
   contents: read
@@ -58,4 +58,3 @@ jobs:
       - run: docker build apps/api
       - run: docker build apps/web
       - run: docker run --rm --add-host web:127.0.0.1 --add-host api:127.0.0.1 -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:1.29-alpine nginx -t
-

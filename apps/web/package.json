@@ -12,6 +12,7 @@
     "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning tests/validation.test.ts"
   },
   "dependencies": {
+    "jose": "^6.2.9",
     "next": "^16.2.9",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

@@ -3,6 +3,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { serverSecret } from "@/lib/secrets";
+import { clearSsoCookie, getSsoSession, ssoConfigured } from "@/lib/sso-auth";
 
 export const ADMIN_COOKIE = "sp_admin";
 export const ADMIN_SESSION_SECONDS = 8 * 60 * 60;
@@ -36,6 +37,7 @@ function equal(left: string, right: string) {
 }
 
 export function adminAuthConfigured() {
+	if (process.env.SERVICEPILOT_AUTH_MODE === "oidc") return ssoConfigured();
 	return Boolean(password() && sessionSecret());
 }
 
@@ -60,6 +62,11 @@ export function createAdminToken() {
 }
 
 export async function getAdminSession(): Promise<AdminSession | null> {
+	if (process.env.SERVICEPILOT_AUTH_MODE === "oidc") {
+		const sso = await getSsoSession();
+		if (!sso || !sso.roles.some((role) => ["agent", "approver", "supervisor", "audit:read", "admin"].includes(role))) return null;
+		return { sub: sso.sub, tenantId: sso.tenantId, roles: sso.roles, exp: sso.expiresAt };
+	}
 	const secret = sessionSecret();
 	if (!secret) {
 		return process.env.NODE_ENV === "production"
@@ -82,3 +89,5 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 export async function hasAdminSession() {
 	return Boolean(await getAdminSession());
 }
+
+export { clearSsoCookie };

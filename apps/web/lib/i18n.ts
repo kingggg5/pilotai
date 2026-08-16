@@ -103,7 +103,7 @@ const dictionaries = {
 			handlingModes: { manual: "เจ้าหน้าที่", copilot: "AI ช่วยเตรียม", autopilot: "AI อัตโนมัติ" },
 		},
 		account: {
-			title: "พื้นที่ของลูกค้า", subtitle: "เก็บข้อมูลติดต่อ เปิดคำขอ และติดตามคำสั่งซื้อในที่เดียว", signIn: "เข้าสู่ระบบ", register: "สร้างบัญชี", name: "ชื่อ–นามสกุล", email: "อีเมล", phone: "เบอร์โทร", password: "รหัสผ่าน", passwordHint: "อย่างน้อย 10 ตัวอักษร", submitLogin: "เข้าสู่บัญชี", submitRegister: "สร้างบัญชี", working: "กำลังตรวจสอบ…", authError: "อีเมลหรือรหัสผ่านไม่ถูกต้อง", profile: "โปรไฟล์", customerId: "Customer ID", save: "บันทึกโปรไฟล์", saved: "บันทึกแล้ว", tickets: "คำขอของฉัน", noTickets: "ยังไม่มีคำขอ", tracking: "ติดตามคำสั่งซื้อ", trackingHelp: "กรอก Order ID ที่ผูกกับคำขอของบัญชีนี้", trackingId: "Order / Tracking ID", track: "ตรวจสอบสถานะ", status: "สถานะ", trackingNumber: "หมายเลขติดตาม", delivery: "วันที่คาดว่าจะถึง", openSupport: "เปิดคำขอใหม่", logout: "ออกจากระบบ",
+			title: "พื้นที่ของลูกค้า", subtitle: "เก็บข้อมูลติดต่อ เปิดคำขอ และติดตามคำสั่งซื้อในที่เดียว", signIn: "เข้าสู่ระบบ", register: "สร้างบัญชี", name: "ชื่อ–นามสกุล", email: "อีเมล", phone: "เบอร์โทร", password: "รหัสผ่าน", passwordHint: "อย่างน้อย 10 ตัวอักษร", submitLogin: "เข้าสู่บัญชี", submitRegister: "สร้างบัญชี", working: "กำลังตรวจสอบ…", authError: "อีเมลหรือรหัสผ่านไม่ถูกต้อง", sso: "เข้าสู่ระบบด้วย SSO ขององค์กร", ssoHint: "ผู้ให้บริการตัวตนขององค์กรจะจัดการรหัสผ่านและ MFA", profile: "โปรไฟล์", customerId: "Customer ID", save: "บันทึกโปรไฟล์", saved: "บันทึกแล้ว", tickets: "คำขอของฉัน", noTickets: "ยังไม่มีคำขอ", tracking: "ติดตามคำสั่งซื้อ", trackingHelp: "กรอก Order ID ที่ผูกกับคำขอของบัญชีนี้", trackingId: "Order / Tracking ID", track: "ตรวจสอบสถานะ", status: "สถานะ", trackingNumber: "หมายเลขติดตาม", delivery: "วันที่คาดว่าจะถึง", openSupport: "เปิดคำขอใหม่", logout: "ออกจากระบบ",
 		},
 		audit: {
 			title: "บันทึกการทำงาน",
@@ -123,6 +123,7 @@ const dictionaries = {
 			submitting: "กำลังตรวจสอบ…",
 			failed: "รหัสผ่านไม่ถูกต้อง",
 			unavailable: "ยังไม่ได้ตั้งค่าการเข้าสู่ระบบสำหรับเจ้าหน้าที่",
+			sso: "เข้าสู่ระบบด้วย SSO ขององค์กร",
 		},
 		status: {
 			new: "ใหม่", investigating: "กำลังตรวจสอบ", needs_approval: "รออนุมัติ", draft_ready: "พร้อมตอบ", resolved: "ปิดงานแล้ว",
@@ -233,7 +234,7 @@ const dictionaries = {
 			handlingModes: { manual: "Staff", copilot: "AI copilot", autopilot: "AI autopilot" },
 		},
 		account: {
-			title: "Customer portal", subtitle: "Keep your contact details, support requests, and order tracking in one place.", signIn: "Sign in", register: "Create account", name: "Full name", email: "Email", phone: "Phone number", password: "Password", passwordHint: "At least 10 characters", submitLogin: "Sign in", submitRegister: "Create account", working: "Checking…", authError: "Email or password is incorrect", profile: "Profile", customerId: "Customer ID", save: "Save profile", saved: "Saved", tickets: "My requests", noTickets: "No requests yet", tracking: "Track an order", trackingHelp: "Enter an order ID already linked to a request on this account.", trackingId: "Order / tracking ID", track: "Check status", status: "Status", trackingNumber: "Tracking number", delivery: "Estimated delivery", openSupport: "Open a new request", logout: "Sign out",
+			title: "Customer portal", subtitle: "Keep your contact details, support requests, and order tracking in one place.", signIn: "Sign in", register: "Create account", name: "Full name", email: "Email", phone: "Phone number", password: "Password", passwordHint: "At least 10 characters", submitLogin: "Sign in", submitRegister: "Create account", working: "Checking…", authError: "Email or password is incorrect", sso: "Continue with organization SSO", ssoHint: "Your organization identity provider handles password and MFA.", profile: "Profile", customerId: "Customer ID", save: "Save profile", saved: "Saved", tickets: "My requests", noTickets: "No requests yet", tracking: "Track an order", trackingHelp: "Enter an order ID already linked to a request on this account.", trackingId: "Order / tracking ID", track: "Check status", status: "Status", trackingNumber: "Tracking number", delivery: "Estimated delivery", openSupport: "Open a new request", logout: "Sign out",
 		},
 		audit: {
 			title: "Audit log",
@@ -253,6 +254,7 @@ const dictionaries = {
 			submitting: "Checking…",
 			failed: "The password is incorrect.",
 			unavailable: "Staff authentication has not been configured.",
+			sso: "Continue with organization SSO",
 		},
 		status: {
 			new: "New", investigating: "Investigating", needs_approval: "Needs approval", draft_ready: "Ready to reply", resolved: "Resolved",

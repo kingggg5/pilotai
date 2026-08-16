@@ -59,6 +59,11 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       AI_FALLBACK_ON_ERROR: ${AI_FALLBACK_ON_ERROR:-false}
+      AI_EXTERNAL_EGRESS_ALLOWED: ${AI_EXTERNAL_EGRESS_ALLOWED:-false}
+      AI_MAX_INPUT_CHARS: ${AI_MAX_INPUT_CHARS:-32000}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-1000}
+      AI_PROVIDER_RPM: ${AI_PROVIDER_RPM:-60}
+      AI_PROVIDER_TPM: ${AI_PROVIDER_TPM:-120000}
       PERSISTENCE_MODE: postgres
       DATABASE_URL: postgresql://servicepilot:${POSTGRES_PASSWORD:-servicepilot}@postgres:5432/servicepilot
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
@@ -68,8 +73,19 @@ services:
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
       AUTH_MODE: ${AUTH_MODE:-local}
       JWT_SECRET: ${JWT_SECRET:-}
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
       JWT_ISSUER: ${JWT_ISSUER:-servicepilot}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-servicepilot-api}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
+      AUTH_TENANT_CLAIM: ${AUTH_TENANT_CLAIM:-tenant_id}
+      AUTH_ROLE_CLAIM: ${AUTH_ROLE_CLAIM:-roles}
+      AUTH_CUSTOMER_ROLE: ${AUTH_CUSTOMER_ROLE:-customer}
+      AUTH_ADMIN_ROLES: ${AUTH_ADMIN_ROLES:-agent,approver,supervisor,audit:read,admin}
+      AUTH_MFA_CLAIM: ${AUTH_MFA_CLAIM:-amr}
+      AUTH_MFA_VALUES: ${AUTH_MFA_VALUES:-mfa,otp,webauthn}
+      AUTH_REQUIRE_MFA: ${AUTH_REQUIRE_MFA:-false}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
@@ -105,11 +121,26 @@ services:
       SERVICEPILOT_TENANT_ID: ${SERVICEPILOT_TENANT_ID:-tenant-local}
       SERVICEPILOT_ADMIN_PASSWORD: ${SERVICEPILOT_ADMIN_PASSWORD:-change-this-before-sharing}
       SERVICEPILOT_SESSION_SECRET: ${SERVICEPILOT_SESSION_SECRET:-local-session-secret-change-me}
+      SERVICEPILOT_SESSION_SECRET_PREVIOUS: ${SERVICEPILOT_SESSION_SECRET_PREVIOUS:-}
       SERVICEPILOT_CUSTOMER_SESSION_SECRET: ${SERVICEPILOT_CUSTOMER_SESSION_SECRET:-local-customer-session-secret-change-me}
       SERVICEPILOT_ADMIN_SUBJECT: ${SERVICEPILOT_ADMIN_SUBJECT:-support-admin}
       SERVICEPILOT_JWT_SECRET: ${JWT_SECRET:-}
+      SERVICEPILOT_JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
       SERVICEPILOT_JWT_ISSUER: ${JWT_ISSUER:-servicepilot}
       SERVICEPILOT_JWT_AUDIENCE: ${JWT_AUDIENCE:-servicepilot-api}
+      SERVICEPILOT_AUTH_MODE: ${AUTH_MODE:-local}
+      SERVICEPILOT_OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      SERVICEPILOT_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      SERVICEPILOT_OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      SERVICEPILOT_OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-http://localhost:3000/api/auth/sso/callback}
+      SERVICEPILOT_OIDC_SCOPE: ${OIDC_SCOPE:-openid profile email}
+      SERVICEPILOT_OIDC_ROLE_CLAIM: ${OIDC_ROLE_CLAIM:-roles}
+      SERVICEPILOT_OIDC_CUSTOMER_ROLE: ${OIDC_CUSTOMER_ROLE:-customer}
+      SERVICEPILOT_OIDC_ADMIN_ROLES: ${OIDC_ADMIN_ROLES:-agent,approver,supervisor,audit:read,admin}
+      SERVICEPILOT_OIDC_TENANT_CLAIM: ${AUTH_TENANT_CLAIM:-tenant_id}
+      SERVICEPILOT_OIDC_MFA_CLAIM: ${AUTH_MFA_CLAIM:-amr}
+      SERVICEPILOT_OIDC_MFA_VALUES: ${AUTH_MFA_VALUES:-mfa,otp,webauthn}
+      SERVICEPILOT_OIDC_MFA_REQUIRED: ${AUTH_REQUIRE_MFA:-false}
       SERVICEPILOT_UPSTREAM_TIMEOUT_MS: ${SERVICEPILOT_UPSTREAM_TIMEOUT_MS:-25000}
       DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-local}
     expose: ["3000"]
@@ -162,7 +193,7 @@ services:
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./infra/otel/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
-    expose: ["4317", "4318"]
+    expose: ["4317", "4318", "8889"]
     restart: unless-stopped
     read_only: true
     tmpfs: ["/tmp"]

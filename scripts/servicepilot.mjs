@@ -97,15 +97,25 @@ function runCheck() {
 		REDIS_URL: process.env.REDIS_URL,
 		WEB_ORIGIN: process.env.WEB_ORIGIN,
 		SERVICEPILOT_TENANT_ID: process.env.SERVICEPILOT_TENANT_ID,
+		OIDC_ISSUER_URL: process.env.OIDC_ISSUER_URL,
+		OIDC_AUDIENCE: process.env.OIDC_AUDIENCE,
+		OIDC_JWKS_URL: process.env.OIDC_JWKS_URL,
+		OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID,
+		OIDC_REDIRECT_URI: process.env.OIDC_REDIRECT_URI,
 	};
 	const created = [];
-	const secrets = ["openai_api_key", "database_url", "postgres_password", "jwt_secret", "webhook_secret", "admin_password", "session_secret"];
+	const secrets = ["openai_api_key", "groq_api_key", "database_url", "postgres_password", "jwt_secret", "jwt_secret_previous", "webhook_secret", "session_secret", "session_secret_previous", "oidc_client_secret", "grafana_admin_password"];
 	try {
 		console.log("\n== Compose validation ==");
 		compose(["config", "--quiet"]);
 		process.env.REDIS_URL = "redis://redis:6379/0";
 		process.env.WEB_ORIGIN = "https://servicepilot.example";
 		process.env.SERVICEPILOT_TENANT_ID = "tenant-validation";
+		process.env.OIDC_ISSUER_URL = "https://issuer.servicepilot.example";
+		process.env.OIDC_AUDIENCE = "servicepilot-api";
+		process.env.OIDC_JWKS_URL = "https://issuer.servicepilot.example/.well-known/jwks.json";
+		process.env.OIDC_CLIENT_ID = "servicepilot-web";
+		process.env.OIDC_REDIRECT_URI = "https://servicepilot.example/api/auth/sso/callback";
 		const secretDir = path.join(root, ".secrets");
 		mkdirSync(secretDir, { recursive: true });
 		for (const secret of secrets) {
@@ -117,6 +127,7 @@ function runCheck() {
 		}
 		const productionArgs = ["-f", "compose.yaml", "-f", "compose.production.yaml", "config", "--quiet"];
 		compose(productionArgs);
+		compose(["-f", "compose.yaml", "-f", "compose.production.yaml", "-f", "compose.observability.yaml", "--profile", "observability", "config", "--quiet"]);
 		const rendered = runOutput("docker", ["compose", "--project-directory", root, ...["-f", "compose.yaml", "-f", "compose.production.yaml", "config"]]);
 		if (/change-this-before-sharing|local-session-secret-change-me/u.test(rendered)) {
 			throw new Error("Production Compose leaked a development secret default");
@@ -156,9 +167,9 @@ function timestamp() {
 	return new Date().toISOString().replace(/[-:TZ.]/gu, "").slice(0, 14);
 }
 
-async function promptSecret(label) {
-	if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY.trim();
-	if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Set OPENAI_API_KEY before running init:production in a non-interactive shell");
+async function promptSecret(label, envName) {
+	if (process.env[envName]) return process.env[envName].trim();
+	if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error(`Set ${envName} before running init:production in a non-interactive shell`);
 	process.stdout.write(`${label}: `);
 	return new Promise((resolve, reject) => {
 		let value = "";
@@ -198,20 +209,34 @@ async function initProduction(args) {
 	if (!publicOrigin || !/^https:\/\//u.test(publicOrigin)) throw new Error("--origin must be an HTTPS URL, for example https://support.example.com");
 	new URL(publicOrigin);
 	if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("--port must be an integer between 1 and 65535");
-	const openAiKey = await promptSecret("OpenAI API key");
-	if (!openAiKey) throw new Error("OpenAI API key is required");
+	const aiMode = process.env.AI_MODE?.trim() || "openai";
+	if (!["openai", "groq"].includes(aiMode)) throw new Error("AI_MODE must be openai or groq for production");
+	const providerKey = await promptSecret(`${aiMode} API key`, aiMode === "groq" ? "GROQ_API_KEY" : "OPENAI_API_KEY");
+	if (!providerKey) throw new Error(`${aiMode} API key is required`);
+	const oidcIssuer = process.env.OIDC_ISSUER_URL?.trim();
+	const oidcAudience = process.env.OIDC_AUDIENCE?.trim();
+	const oidcJwks = process.env.OIDC_JWKS_URL?.trim();
+	const oidcClientId = process.env.OIDC_CLIENT_ID?.trim();
+	const oidcRedirect = process.env.OIDC_REDIRECT_URI?.trim();
+	if (!oidcIssuer || !oidcAudience || !oidcJwks || !oidcClientId || !oidcRedirect) throw new Error("Set OIDC_ISSUER_URL, OIDC_AUDIENCE, OIDC_JWKS_URL, OIDC_CLIENT_ID, and OIDC_REDIRECT_URI before init:production");
+	const oidcClientSecret = await promptSecret("OIDC client secret", "OIDC_CLIENT_SECRET");
+	if (!oidcClientSecret) throw new Error("OIDC client secret is required");
 
 	const secretDir = path.join(root, ".secrets");
 	mkdirSync(secretDir, { recursive: true });
 	const postgresPassword = randomBytes(48).toString("base64url");
 	const secrets = {
-		openai_api_key: openAiKey,
+		openai_api_key: aiMode === "openai" ? providerKey : "",
+		groq_api_key: aiMode === "groq" ? providerKey : "",
 		postgres_password: postgresPassword,
 		database_url: `postgresql://servicepilot:${postgresPassword}@postgres:5432/servicepilot`,
 		jwt_secret: randomBytes(48).toString("base64url"),
+		jwt_secret_previous: randomBytes(48).toString("base64url"),
 		webhook_secret: randomBytes(48).toString("base64url"),
-		admin_password: randomBytes(48).toString("base64url"),
 		session_secret: randomBytes(48).toString("base64url"),
+		session_secret_previous: randomBytes(48).toString("base64url"),
+		oidc_client_secret: oidcClientSecret,
+		grafana_admin_password: randomBytes(32).toString("base64url"),
 	};
 	for (const [name, value] of Object.entries(secrets)) writeFileSync(path.join(secretDir, name), `${value}\n`, { mode: 0o600 });
 	const env = [
@@ -219,11 +244,19 @@ async function initProduction(args) {
 		`NGINX_PORT=${port}`,
 		`DEPLOYMENT_VERSION=${timestamp()}`,
 		`WEB_ORIGIN=${publicOrigin.replace(/\/$/u, "")}`,
+		`AI_MODE=${aiMode}`,
 		"OPENAI_MODEL=gpt-5.6-luna",
 		"OPENAI_REASONING_EFFORT=low",
+		"AI_EXTERNAL_EGRESS_ALLOWED=true",
 		"REDIS_URL=redis://redis:6379/0",
+		"AUTH_MODE=oidc",
 		"JWT_ISSUER=servicepilot",
 		"JWT_AUDIENCE=servicepilot-api",
+		`OIDC_ISSUER_URL=${oidcIssuer}`,
+		`OIDC_AUDIENCE=${oidcAudience}`,
+		`OIDC_JWKS_URL=${oidcJwks}`,
+		`OIDC_CLIENT_ID=${oidcClientId}`,
+		`OIDC_REDIRECT_URI=${oidcRedirect}`,
 		`SERVICEPILOT_TENANT_ID=${tenantId}`,
 		"SERVICEPILOT_ADMIN_SUBJECT=support-admin",
 		"OTEL_ENABLED=false",
@@ -237,13 +270,14 @@ function runDeploy(args) {
 	const environmentFile = option(args, "--env-file", ".env.production");
 	const envPath = path.resolve(root, environmentFile);
 	if (!existsSync(envPath)) throw new Error(`Missing ${environmentFile}. Run npm run init:production first.`);
-	for (const secret of ["openai_api_key", "database_url", "postgres_password", "jwt_secret", "webhook_secret", "admin_password", "session_secret"]) {
+	for (const secret of ["openai_api_key", "groq_api_key", "database_url", "postgres_password", "jwt_secret", "jwt_secret_previous", "webhook_secret", "session_secret", "session_secret_previous", "oidc_client_secret", "grafana_admin_password"]) {
 		requiredFile(path.join(".secrets", secret), `Missing .secrets/${secret}. Run npm run init:production first.`);
 	}
-	const composeArgs = ["--env-file", envPath];
-	if (hasOption(args, "--observability")) composeArgs.push("--profile", "observability");
-	composeArgs.push("-f", "compose.yaml", "-f", "compose.production.yaml", "up", "--build", "--force-recreate", "--wait", "--wait-timeout", "180");
-	compose(composeArgs);
+	const composeArgs = ["--env-file", envPath, "-f", "compose.yaml", "-f", "compose.production.yaml"];
+	const observability = hasOption(args, "--observability");
+	if (observability) composeArgs.push("-f", "compose.observability.yaml", "--profile", "observability");
+	composeArgs.push("up", "--build", "--force-recreate", "--wait", "--wait-timeout", "180");
+	compose(composeArgs, observability ? { OTEL_ENABLED: "true" } : process.env);
 	console.log(`ServicePilot is healthy. Open the WEB_ORIGIN configured in ${environmentFile}.`);
 }
 

@@ -252,7 +252,9 @@ Docker Compose runs the PostgreSQL migration before the API and waits for the Po
 | `/health/live` | Process liveness |
 | `/health/ready` | Dependency readiness |
 
-The local staff password is the value of `SERVICEPILOT_ADMIN_PASSWORD` in `.env.local`.
+Production hardening, JWT/OIDC SSO, MFA enforcement, secret rotation, AI provider privacy/quota controls, OTel dashboards, alerts, load testing, and OWASP ZAP checks are documented in [docs/operations.md](./docs/operations.md).
+
+For local development only, the staff password is the value of `SERVICEPILOT_ADMIN_PASSWORD` in `.env.local`; production uses OIDC SSO and MFA.
 
 ### 4. Stop the stack
 

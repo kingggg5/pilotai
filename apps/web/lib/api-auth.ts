@@ -5,6 +5,7 @@ import { createHmac } from "node:crypto";
 import { getAdminSession } from "@/lib/admin-auth";
 import { getCustomerSession } from "@/lib/customer-auth";
 import { serverSecret } from "@/lib/secrets";
+import { getSsoSession } from "@/lib/sso-auth";
 
 export type ApiActor = "admin" | "customer";
 type Claims = { sub: string; tenant_id: string; roles: string[] };
@@ -31,6 +32,11 @@ function jwt(claims: Claims) {
 }
 
 export async function apiHeaders(actor: ApiActor) {
+	if (process.env.SERVICEPILOT_AUTH_MODE === "oidc") {
+		const session = await getSsoSession();
+		if (!session?.accessToken) throw new Error("SSO session expired");
+		return { "X-Tenant-ID": session.tenantId, "X-Actor-ID": session.sub, Authorization: `Bearer ${session.accessToken}` };
+	}
 	const tenantId = process.env.SERVICEPILOT_TENANT_ID ?? "tenant-local";
 	let claims: Claims;
 	if (actor === "admin") {

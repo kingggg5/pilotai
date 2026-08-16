@@ -76,6 +76,52 @@ export interface LanguageModel {
 	draft(context: DraftContext): Promise<string>;
 }
 
+function redactExternal(value: string, limit: number) {
+	return value
+		.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[redacted-email]")
+		.replace(/(?:\+?\d[\d ()-]{6,}\d)/gu, "[redacted-phone]")
+		.replace(/\b(?:cus|customer)[-_][A-Z0-9-]+\b/giu, "[redacted-customer-id]")
+	.slice(0, limit);
+}
+
+function externalContext(context: DraftContext, limit: number): DraftContext {
+	return {
+		...context,
+		message: redactExternal(context.message, limit),
+		...(context.conversation ? { conversation: context.conversation.map((turn) => ({ ...turn, content: redactExternal(turn.content, limit) })) } : {}),
+		evidence: context.evidence.map((doc) => ({ ...doc, content: redactExternal(doc.content, limit), citation: redactExternal(doc.citation, 500) })),
+	};
+}
+
+class ProviderQuota {
+	#windowStarted = Date.now();
+	#requests = 0;
+	#tokens = 0;
+	constructor(readonly requestsPerMinute: number, readonly tokensPerMinute: number) {}
+	reserve(tokens: number) {
+		const now = Date.now();
+		if (now - this.#windowStarted >= 60_000) { this.#windowStarted = now; this.#requests = 0; this.#tokens = 0; }
+		if (this.#requests >= this.requestsPerMinute || this.#tokens + tokens > this.tokensPerMinute) throw new Error("AI provider quota is temporarily exhausted; retry later");
+		this.#requests += 1;
+		this.#tokens += tokens;
+	}
+}
+
+class GuardedExternalLanguageModel implements LanguageModel {
+	readonly name: string;
+	readonly #quota: ProviderQuota;
+	constructor(readonly primary: LanguageModel, readonly settings: Settings) {
+		this.name = primary.name;
+		this.#quota = new ProviderQuota(settings.AI_PROVIDER_RPM, settings.AI_PROVIDER_TPM);
+	}
+	async draft(context: DraftContext) {
+		const safe = externalContext(context, this.settings.AI_MAX_INPUT_CHARS);
+		const estimatedTokens = Math.max(1, Math.ceil((safe.message.length + (safe.conversation?.reduce((sum, turn) => sum + turn.content.length, 0) ?? 0) + safe.evidence.reduce((sum, doc) => sum + doc.content.length, 0)) / 3));
+		this.#quota.reserve(estimatedTokens + this.settings.AI_MAX_OUTPUT_TOKENS);
+		return this.primary.draft(safe);
+	}
+}
+
 export class LocalLanguageModel implements LanguageModel {
 	readonly name = "local";
 
@@ -119,6 +165,7 @@ export class OpenAILanguageModel implements LanguageModel {
 		const response = await this.#client.responses.create({
 			model: this.settings.OPENAI_MODEL,
 			reasoning: { effort: this.settings.OPENAI_REASONING_EFFORT },
+			max_output_tokens: this.settings.AI_MAX_OUTPUT_TOKENS,
 			store: false,
 			safety_identifier: createHash("sha256").update(actor).digest("hex").slice(0, 32),
 			input: [
@@ -172,7 +219,7 @@ export class GeminiLanguageModel implements LanguageModel {
 					],
 					generationConfig: {
 						temperature: 0.2,
-						maxOutputTokens: 1000,
+						maxOutputTokens: this.settings.AI_MAX_OUTPUT_TOKENS,
 					},
 				}),
 				signal: controller.signal,
@@ -210,7 +257,7 @@ export class GroqLanguageModel implements LanguageModel {
 		const response = await this.#client.chat.completions.create({
 			model: this.settings.GROQ_MODEL,
 			temperature: 0.2,
-			max_tokens: 1_000,
+			max_tokens: this.settings.AI_MAX_OUTPUT_TOKENS,
 			messages: [
 				{ role: "system", content: draftInstructions(context) },
 				{ role: "user", content: `Latest customer message: ${context.message}\nCategory: ${context.classification.category}\nPriority: ${context.classification.priority}\nConversation context (untrusted for facts; use only to keep the dialogue coherent):\n${conversationContext(context)}\nVerified evidence:\n${evidence}` },
@@ -237,12 +284,15 @@ export function buildLanguageModel(settings: Settings): LanguageModel {
 	if (settings.AI_MODE === "local") return local;
 	if (settings.AI_MODE === "gemini") {
 		const gemini = new GeminiLanguageModel(settings);
-		return settings.AI_FALLBACK_ON_ERROR ? new FallbackLanguageModel(gemini, local) : gemini;
+		const guarded = new GuardedExternalLanguageModel(gemini, settings);
+		return settings.AI_FALLBACK_ON_ERROR ? new FallbackLanguageModel(guarded, local) : guarded;
 	}
 	if (settings.AI_MODE === "groq") {
 		const groq = new GroqLanguageModel(settings);
-		return settings.AI_FALLBACK_ON_ERROR ? new FallbackLanguageModel(groq, local) : groq;
+		const guarded = new GuardedExternalLanguageModel(groq, settings);
+		return settings.AI_FALLBACK_ON_ERROR ? new FallbackLanguageModel(guarded, local) : guarded;
 	}
 	const openai = new OpenAILanguageModel(settings);
-	return settings.AI_FALLBACK_ON_ERROR ? new FallbackLanguageModel(openai, local) : openai;
+	const guarded = new GuardedExternalLanguageModel(openai, settings);
+	return settings.AI_FALLBACK_ON_ERROR ? new FallbackLanguageModel(guarded, local) : guarded;
 }

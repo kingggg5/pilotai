@@ -1,0 +1,31 @@
+groups:
+  - name: servicepilot
+    rules:
+      - alert: ServicePilotApiDown
+        expr: up{job="servicepilot-api"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: ServicePilot API is unreachable
+          runbook: https://github.com/kingggg5/pilotai/blob/main/docs/operations.md#api-down
+      - alert: ServicePilotErrorRateHigh
+        expr: rate(servicepilot_failures_total[5m]) / clamp_min(rate(servicepilot_requests_total[5m]), 1) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: ServicePilot API error rate is above 5%
+          runbook: https://github.com/kingggg5/pilotai/blob/main/docs/operations.md#error-rate
+      - alert: ServicePilotApprovalBacklog
+        expr: servicepilot_approvals_pending > 20
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: Human approval backlog is above 20 tickets
+          runbook: https://github.com/kingggg5/pilotai/blob/main/docs/operations.md#approval-backlog
+      - alert: ServicePilotLatencyHigh
+        expr: servicepilot_latency_p95_ms > 2000
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: ServicePilot p95 request latency is above 2 seconds
+          runbook: https://github.com/kingggg5/pilotai/blob/main/docs/operations.md#latency

@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
-import { jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import { createClient, type RedisClientType } from "redis";
 
 import type { Principal } from "./domain.js";
@@ -8,6 +8,49 @@ import type { Settings } from "./config.js";
 
 function unauthorized(message = "Bearer token required") {
 	return Object.assign(new Error(message), { statusCode: 401, headers: { "WWW-Authenticate": "Bearer" } });
+}
+
+const remoteKeys = new Map<string, JWTVerifyGetKey>();
+
+function oidcKey(settings: Settings) {
+	if (!settings.OIDC_JWKS_URL) throw unauthorized("OIDC JWKS is not configured");
+	let key = remoteKeys.get(settings.OIDC_JWKS_URL);
+	if (!key) {
+		const url = new URL(settings.OIDC_JWKS_URL);
+		if (url.protocol !== "https:" && settings.APP_ENV === "production") throw unauthorized("OIDC JWKS must use HTTPS");
+		key = createRemoteJWKSet(url);
+		remoteKeys.set(settings.OIDC_JWKS_URL, key);
+	}
+	return key;
+}
+
+function claimValues(value: unknown) {
+	return Array.isArray(value) ? value.map(String) : typeof value === "string" ? value.split(/[ ,]+/u).filter(Boolean) : [];
+}
+
+function verifyMfa(payload: Record<string, unknown>, settings: Settings) {
+	if (!settings.AUTH_REQUIRE_MFA) return;
+	const values = claimValues(payload[settings.AUTH_MFA_CLAIM]);
+	const accepted = settings.AUTH_MFA_VALUES.split(",").map((item) => item.trim()).filter(Boolean);
+	if (!values.some((value) => accepted.includes(value))) throw unauthorized("Multi-factor authentication is required");
+}
+
+function rolesFromClaims(payload: Record<string, unknown>, settings: Settings) {
+	const roles = claimValues(payload[settings.AUTH_ROLE_CLAIM] ?? payload.roles ?? payload.groups ?? payload.scope);
+	if (roles.includes(settings.AUTH_CUSTOMER_ROLE)) roles.push("customer", "ticket:create");
+	if (settings.AUTH_ADMIN_ROLES.split(",").map((item) => item.trim()).some((role) => roles.includes(role))) roles.push("agent", "approver", "audit:read");
+	return [...new Set(roles)];
+}
+
+function tenantFromClaims(payload: Record<string, unknown>, settings: Settings) {
+	const tenant = payload[settings.AUTH_TENANT_CLAIM] ?? payload.tenant_id ?? payload.org_id;
+	if (typeof tenant !== "string" || !tenant) throw unauthorized("Tenant claim is required");
+	return tenant;
+}
+
+async function verifyBearer(token: string, settings: Settings) {
+	if (settings.AUTH_MODE === "oidc") return jwtVerify(token, oidcKey(settings), { algorithms: ["RS256", "ES256"], issuer: settings.OIDC_ISSUER_URL!, audience: settings.OIDC_AUDIENCE!, clockTolerance: settings.JWT_LEEWAY_SECONDS, requiredClaims: ["sub"] });
+	return jwtVerify(token, new TextEncoder().encode(settings.JWT_SECRET!), { algorithms: ["HS256"], issuer: settings.JWT_ISSUER, audience: settings.JWT_AUDIENCE, clockTolerance: settings.JWT_LEEWAY_SECONDS, requiredClaims: ["sub", "tenant_id"] });
 }
 
 export async function principalFor(request: FastifyRequest, settings: Settings): Promise<Principal> {
@@ -24,16 +67,31 @@ export async function principalFor(request: FastifyRequest, settings: Settings):
 		return { subject: actor, tenant_id: tenant, roles, auth_mode: "local" };
 	}
 	const authorization = request.headers.authorization;
-	if (!authorization?.startsWith("Bearer ") || !settings.JWT_SECRET) throw unauthorized();
+	if (!authorization?.startsWith("Bearer ") || (settings.AUTH_MODE === "jwt" && !settings.JWT_SECRET)) throw unauthorized();
 	try {
-		const result = await jwtVerify(authorization.slice(7), new TextEncoder().encode(settings.JWT_SECRET), {
+		let result;
+		try {
+			result = await verifyBearer(authorization.slice(7), settings);
+		} catch (error) {
+			if (settings.AUTH_MODE !== "jwt" || !settings.JWT_SECRET_PREVIOUS) throw error;
+			result = await jwtVerify(authorization.slice(7), new TextEncoder().encode(settings.JWT_SECRET_PREVIOUS), {
 			algorithms: ["HS256"], issuer: settings.JWT_ISSUER, audience: settings.JWT_AUDIENCE,
-			clockTolerance: settings.JWT_LEEWAY_SECONDS,
-			requiredClaims: ["sub", "tenant_id"],
-		});
-		const roles = Array.isArray(result.payload.roles) ? result.payload.roles.map(String) : [];
-		return { subject: result.payload.sub!, tenant_id: String(result.payload.tenant_id), roles, auth_mode: "jwt" };
-	} catch { throw unauthorized("Invalid or expired bearer token"); }
+			clockTolerance: settings.JWT_LEEWAY_SECONDS, requiredClaims: ["sub", "tenant_id"],
+			});
+		}
+		verifyMfa(result.payload as Record<string, unknown>, settings);
+		const payload = result.payload as Record<string, unknown>;
+		return {
+			subject: result.payload.sub!, tenant_id: settings.AUTH_MODE === "oidc" ? tenantFromClaims(payload, settings) : String(result.payload.tenant_id),
+			roles: rolesFromClaims(payload, settings), auth_mode: settings.AUTH_MODE === "oidc" ? "oidc" : "jwt",
+			...(typeof payload.email === "string" ? { email: payload.email } : {}),
+			...(typeof payload.name === "string" ? { name: payload.name } : {}),
+			...(typeof payload.phone_number === "string" ? { phone: payload.phone_number } : {}),
+		};
+	} catch (error) {
+		if (error instanceof Error && (error as { statusCode?: number }).statusCode === 401) throw error;
+		throw unauthorized("Invalid or expired bearer token");
+	}
 }
 
 export function requireRole(principal: Principal, allowed: readonly string[], message: string) {

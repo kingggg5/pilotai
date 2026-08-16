@@ -7,8 +7,10 @@ import {
 	createAdminToken,
 	verifyAdminPassword,
 } from "@/lib/admin-auth";
+import { clearSsoCookie } from "@/lib/sso-auth";
 
 export async function POST(request: Request) {
+	if (process.env.SERVICEPILOT_AUTH_MODE === "oidc") return NextResponse.json({ ok: false, message: "Use SSO sign-in" }, { status: 400 });
 	if (!adminAuthConfigured()) return NextResponse.json({ ok: false }, { status: 503 });
 	try {
 		const body = await request.json() as { password?: unknown };
@@ -32,6 +34,7 @@ export async function POST(request: Request) {
 
 export async function DELETE() {
 	const response = NextResponse.json({ ok: true });
+	if (process.env.SERVICEPILOT_AUTH_MODE === "oidc") { clearSsoCookie(response); return response; }
 	response.cookies.set(ADMIN_COOKIE, "", { httpOnly: true, sameSite: "strict", path: "/", maxAge: 0 });
 	return response;
 }

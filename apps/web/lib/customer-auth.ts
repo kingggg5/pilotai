@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
 import { serverSecret } from "@/lib/secrets";
+import { getSsoSession } from "@/lib/sso-auth";
 
 export const CUSTOMER_COOKIE = "sp_customer";
 export const CUSTOMER_SESSION_SECONDS = 7 * 24 * 60 * 60;
@@ -40,6 +41,11 @@ export function createCustomerToken(profile: Omit<CustomerSession, "tenantId" | 
 }
 
 export async function getCustomerSession(): Promise<CustomerSession | null> {
+	if (process.env.SERVICEPILOT_AUTH_MODE === "oidc") {
+		const sso = await getSsoSession();
+		if (!sso || !sso.roles.includes("customer")) return null;
+		return { sub: sso.sub, tenantId: sso.tenantId, name: sso.name, email: sso.email, phone: sso.phone, exp: sso.expiresAt };
+	}
 	const key = secret();
 	const token = (await cookies()).get(CUSTOMER_COOKIE)?.value;
 	if (!key || !token) return null;

@@ -504,6 +504,7 @@ label small { justify-self: end; color: #aaa9a2; font-weight: 500; }
 .account-auth-card input { min-height: 52px; padding: 0 16px; font-size: 1rem; border-radius: 12px; }
 .account-auth-card small { color: var(--muted-light); font-size: 0.8125rem; margin-top: -2px; }
 .account-auth-card .primary-button { min-height: 54px; margin-top: 10px; font-size: 1.0625rem; width: 100%; }
+.auth-sso-note { margin: 16px 0 0; color: var(--muted-light); line-height: 1.5; text-align: center; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px; background: #151513; border: 1px solid var(--line-deep); border-radius: 14px; margin-bottom: 8px; }
 .auth-tabs a { min-height: 44px; display: grid; place-items: center; border-radius: 10px; color: var(--muted-light); font-weight: 800; font-size: 0.9375rem; transition: all 0.15s ease; }
 .auth-tabs a:hover { color: var(--paper); }

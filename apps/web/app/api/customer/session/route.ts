@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { loginCustomer, registerCustomer } from "@/lib/api";
 import { CUSTOMER_COOKIE, CUSTOMER_SESSION_SECONDS, createCustomerToken } from "@/lib/customer-auth";
+import { clearSsoCookie } from "@/lib/sso-auth";
 
 function sessionResponse(profile: { id: string; name: string; email: string; phone: string }, status = 200) {
 	const response = NextResponse.json({ ok: true, profile }, { status });
@@ -13,6 +14,7 @@ function sessionResponse(profile: { id: string; name: string; email: string; pho
 
 export async function POST(request: Request) {
 	try {
+		if (process.env.SERVICEPILOT_AUTH_MODE === "oidc") return NextResponse.json({ ok: false, message: "Use SSO sign-in" }, { status: 400 });
 		const body = await request.json() as Record<string, unknown>;
 		if (body.mode === "register") {
 			if (typeof body.name !== "string" || typeof body.email !== "string" || typeof body.phone !== "string" || typeof body.password !== "string") throw new Error("Invalid registration");
@@ -28,6 +30,7 @@ export async function POST(request: Request) {
 
 export async function DELETE() {
 	const response = NextResponse.json({ ok: true });
+	if (process.env.SERVICEPILOT_AUTH_MODE === "oidc") { clearSsoCookie(response); return response; }
 	response.cookies.set(CUSTOMER_COOKIE, "", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 0 });
 	return response;
 }

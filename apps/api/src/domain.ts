@@ -238,7 +238,15 @@ export const KnowledgeDocumentUpsert = z.object({
 });
 export type KnowledgeDocumentUpsert = z.infer<typeof KnowledgeDocumentUpsert>;
 
-export interface Principal { subject: string; tenant_id: string; roles: string[]; auth_mode: "local" | "jwt" }
+export interface Principal {
+	subject: string;
+	tenant_id: string;
+	roles: string[];
+	auth_mode: "local" | "jwt" | "oidc";
+	email?: string;
+	name?: string;
+	phone?: string;
+}
 export interface LiveOrderStatus { order_id: string; status: string; estimated_delivery?: string | null; tracking_number?: string | null; updated_at: string }
 export interface RefundStatus { order_id: string; refund_id?: string | null; status: string; amount?: number | null; currency?: string | null; updated_at: string }
 export interface Escalation { escalation_id: string; status: string; priority: Priority; created_at: string }

@@ -18,6 +18,8 @@ export async function registerSystemRoutes(app: FastifyInstance, container: AppC
 		return reply.code(ready ? 200 : 503).send({ ready, checks: { database: database ? "ok" : "unavailable", persistence: container.runs.backend, checkpointer: container.workflow.checkpointerBackend } });
 	});
 
+	api.get("/metrics", { schema: { hide: true } }, async (_, reply) => reply.type("text/plain; version=0.0.4").send(container.metrics.prometheus()));
+
 	api.get("/openapi.json", { schema: { hide: true } }, async () => app.swagger());
 	api.get("/api/v1/me", { preHandler: authenticate, schema: { tags: ["security"], security: [{ bearerAuth: [] }], response: { 200: z.object({ subject: z.string(), tenant_id: z.string(), roles: z.array(z.string()), auth_mode: z.string() }) } } },
 		async (request) => principal(request));

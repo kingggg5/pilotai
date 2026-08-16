@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { AuditActions } from "../audit.js";
 import type { AppContainer } from "../container.js";
-import { CustomerLoginRequest, CustomerProfile, CustomerRegisterRequest, CustomerUpdateRequest, OrderRecord, PurchaseRequest, TicketCreateRequest, TicketSummary } from "../domain.js";
+import { CustomerLoginRequest, CustomerProfile, CustomerRegisterRequest, CustomerUpdateRequest, OrderRecord, PurchaseRequest, TicketCreateRequest, TicketSummary, type Principal } from "../domain.js";
 import { requireRole } from "../security.js";
 import { routeContext } from "./context.js";
 import { workItem } from "./operations.js";
@@ -30,19 +30,19 @@ async function passwordMatches(password: string, stored: string) {
 
 const profile = (customer: { id: string; name: string; email: string; phone: string; created_at: string; updated_at: string }) => CustomerProfile.parse(customer);
 
-async function ensureCustomerAccount(actor: { subject: string; tenant_id: string }, container: AppContainer) {
+async function ensureCustomerAccount(actor: Pick<Principal, "subject" | "tenant_id" | "email" | "name" | "phone">, container: AppContainer) {
 	const existing = await container.customers.get(actor.subject, actor.tenant_id);
 	if (existing) return existing;
 
 	const now = new Date().toISOString();
-	const name = actor.subject.includes("@") ? (actor.subject.split("@")[0] || "Customer") : actor.subject;
-	const email = actor.subject.includes("@") ? actor.subject : `${actor.subject}@example.com`;
+	const name = actor.name || (actor.subject.includes("@") ? (actor.subject.split("@")[0] || "Customer") : actor.subject);
+	const email = actor.email || (actor.subject.includes("@") ? actor.subject : `${actor.subject}@example.com`);
 	const created = {
 		id: actor.subject,
 		tenant_id: actor.tenant_id,
 		name,
 		email,
-		phone: "081-234-5678",
+		phone: actor.phone && actor.phone.length >= 7 ? actor.phone : "0000000000",
 		password_hash: "local-bypass",
 		created_at: now,
 		updated_at: now,
@@ -74,7 +74,7 @@ export async function registerCustomerRoutes(app: FastifyInstance, container: Ap
 
 	api.get("/api/v1/customer/me", { preHandler: authenticate, schema: { tags: ["customer"], response: { 200: CustomerProfile, 404: z.any() } } }, async (request, reply) => {
 		const actor = principal(request); requireRole(actor, ["customer"], "Customer role required");
-		const customer = await container.customers.get(actor.subject, actor.tenant_id);
+		const customer = container.settings.AUTH_MODE === "oidc" ? await ensureCustomerAccount(actor, container) : await container.customers.get(actor.subject, actor.tenant_id);
 		return customer ? profile(customer) : reply.code(404).send({ detail: "Customer not found", code: "NOT_FOUND" });
 	});
 

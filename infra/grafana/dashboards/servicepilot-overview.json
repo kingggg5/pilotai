@@ -1,0 +1,20 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"type": "stat", "title": "Requests", "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}, "targets": [{"expr": "servicepilot_requests_total", "refId": "A"}]},
+    {"type": "stat", "title": "Failures", "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}, "targets": [{"expr": "servicepilot_failures_total", "refId": "A"}]},
+    {"type": "stat", "title": "Approval backlog", "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}, "targets": [{"expr": "servicepilot_approvals_pending", "refId": "A"}]},
+    {"type": "stat", "title": "p95 latency (ms)", "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}, "targets": [{"expr": "servicepilot_latency_p95_ms", "refId": "A"}]},
+    {"type": "timeseries", "title": "Request and failure rate", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}, "targets": [{"expr": "rate(servicepilot_requests_total[5m])", "legendFormat": "requests/s", "refId": "A"}, {"expr": "rate(servicepilot_failures_total[5m])", "legendFormat": "failures/s", "refId": "B"}]},
+    {"type": "timeseries", "title": "Automation outcomes", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}, "targets": [{"expr": "rate(servicepilot_automation_completed_total[5m])", "legendFormat": "completed/s", "refId": "A"}, {"expr": "rate(servicepilot_customer_followups_total[5m])", "legendFormat": "customer follow-up/s", "refId": "B"}, {"expr": "rate(servicepilot_automation_routed_total[5m])", "legendFormat": "routed/s", "refId": "C"}]}
+  ],
+  "schemaVersion": 39,
+  "tags": ["servicepilot", "operations"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "ServicePilot Overview",
+  "uid": "servicepilot-overview",
+  "version": 1
+}

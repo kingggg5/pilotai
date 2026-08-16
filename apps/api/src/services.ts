@@ -89,6 +89,25 @@ export class OperationsMetrics {
 	failure() { this.failures += 1; }
 	resolveApproval() { this.pending = Math.max(0, this.pending - 1); }
 	snapshot() { const values = [...this.latencies].sort((a, b) => a - b); const percentile = (value: number) => values[Math.max(0, Math.ceil(values.length * value) - 1)] ?? 0; return { requests_total: this.requests, failures_total: this.failures, approvals_pending: this.pending, abstentions_total: this.abstentions, automation_evaluated_total: this.automationEvaluated, automation_completed_total: this.autoCompleted, automation_routed_total: this.autoRouted, customer_followups_total: this.customerFollowups, handling_manual_total: this.manualSelected, handling_copilot_total: this.copilotSelected, handling_autopilot_total: this.autopilotSelected, latency_p50_ms: percentile(0.5), latency_p95_ms: percentile(0.95), metrics: [{ name: "failure_rate", value: this.requests ? this.failures / this.requests : 0, unit: "ratio", status: this.failures ? "watch" : "healthy" }, { name: "approval_backlog", value: this.pending, unit: "tickets", status: this.pending > 20 ? "watch" : "healthy" }, { name: "automation_rate", value: this.automationEvaluated ? this.autoCompleted / this.automationEvaluated : 0, unit: "ratio", status: "healthy" }, { name: "autopilot_adoption", value: this.automationEvaluated ? this.autopilotSelected / this.automationEvaluated : 0, unit: "ratio", status: "healthy" }] }; }
+	prometheus() {
+		const snapshot = this.snapshot();
+		const metrics: Record<string, number> = {
+			servicepilot_requests_total: snapshot.requests_total,
+			servicepilot_failures_total: snapshot.failures_total,
+			servicepilot_approvals_pending: snapshot.approvals_pending,
+			servicepilot_abstentions_total: snapshot.abstentions_total,
+			servicepilot_automation_evaluated_total: snapshot.automation_evaluated_total,
+			servicepilot_automation_completed_total: snapshot.automation_completed_total,
+			servicepilot_automation_routed_total: snapshot.automation_routed_total,
+			servicepilot_customer_followups_total: snapshot.customer_followups_total,
+			servicepilot_handling_manual_total: snapshot.handling_manual_total,
+			servicepilot_handling_copilot_total: snapshot.handling_copilot_total,
+			servicepilot_handling_autopilot_total: snapshot.handling_autopilot_total,
+			servicepilot_latency_p50_ms: snapshot.latency_p50_ms,
+			servicepilot_latency_p95_ms: snapshot.latency_p95_ms,
+		};
+		return `${Object.entries(metrics).map(([name, value]) => `# TYPE ${name} gauge\n${name} ${value}`).join("\n")}\n`;
+	}
 }
 
 export class ModelRoutingService {
@@ -133,4 +152,3 @@ export class ModelRoutingService {
 		};
 	}
 }
-

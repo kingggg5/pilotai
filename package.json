@@ -12,6 +12,8 @@
     "check": "node scripts/servicepilot.mjs check",
     "quality": "node scripts/servicepilot.mjs quality",
     "ai:eval": "node scripts/servicepilot.mjs ai-eval",
+		"security:test": "node scripts/security-smoke.mjs",
+		"load:test": "node scripts/load-test.mjs",
     "init:production": "node scripts/servicepilot.mjs init-production",
     "deploy": "node scripts/servicepilot.mjs deploy"
   }

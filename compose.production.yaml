@@ -25,24 +25,37 @@ services:
   api:
     environment:
       APP_ENV: production
-      AI_MODE: openai
+      AI_MODE: ${AI_MODE:-openai}
       OPENAI_API_KEY: !reset null
       OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
-      EMBEDDING_PROVIDER: openai
+      GROQ_API_KEY: !reset null
+      GROQ_API_KEY_FILE: /run/secrets/groq_api_key
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
       EMBEDDING_MODEL: text-embedding-3-small
       AI_FALLBACK_ON_ERROR: "false"
+      AI_EXTERNAL_EGRESS_ALLOWED: "true"
+      AI_PROVIDER_RPM: ${AI_PROVIDER_RPM:-60}
+      AI_PROVIDER_TPM: ${AI_PROVIDER_TPM:-120000}
       PERSISTENCE_MODE: postgres
       DATABASE_URL: !reset null
       DATABASE_URL_FILE: /run/secrets/database_url
       REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
-      AUTH_MODE: jwt
+      AUTH_MODE: oidc
       JWT_SECRET: !reset null
       JWT_SECRET_FILE: /run/secrets/jwt_secret
+      JWT_SECRET_PREVIOUS: !reset null
+      JWT_SECRET_PREVIOUS_FILE: /run/secrets/jwt_secret_previous
       WEBHOOK_SECRET: !reset null
       WEBHOOK_SECRET_FILE: /run/secrets/webhook_secret
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?OIDC_ISSUER_URL is required}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:?OIDC_JWKS_URL is required}
+      AUTH_REQUIRE_MFA: "true"
+      AUTH_CUSTOMER_ROLE: ${AUTH_CUSTOMER_ROLE:-customer}
+      AUTH_ADMIN_ROLES: ${AUTH_ADMIN_ROLES:-agent,approver,supervisor,audit:read,admin}
       WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required}
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
-    secrets: [openai_api_key, database_url, jwt_secret, webhook_secret]
+    secrets: [openai_api_key, groq_api_key, database_url, jwt_secret, jwt_secret_previous, webhook_secret]
     deploy:
       resources:
         limits: { cpus: "2.0", memory: 1G }
@@ -52,12 +65,27 @@ services:
       SERVICEPILOT_TENANT_ID: ${SERVICEPILOT_TENANT_ID:?SERVICEPILOT_TENANT_ID is required}
       SERVICEPILOT_ADMIN_SUBJECT: ${SERVICEPILOT_ADMIN_SUBJECT:-support-admin}
       SERVICEPILOT_ADMIN_PASSWORD: !reset null
-      SERVICEPILOT_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
       SERVICEPILOT_SESSION_SECRET: !reset null
       SERVICEPILOT_SESSION_SECRET_FILE: /run/secrets/session_secret
+      SERVICEPILOT_SESSION_SECRET_PREVIOUS: !reset null
+      SERVICEPILOT_SESSION_SECRET_PREVIOUS_FILE: /run/secrets/session_secret_previous
       SERVICEPILOT_JWT_SECRET: !reset null
       SERVICEPILOT_JWT_SECRET_FILE: /run/secrets/jwt_secret
-    secrets: [admin_password, session_secret, jwt_secret]
+      SERVICEPILOT_AUTH_MODE: oidc
+      SERVICEPILOT_OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?OIDC_ISSUER_URL is required}
+      SERVICEPILOT_OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?OIDC_CLIENT_ID is required}
+      SERVICEPILOT_OIDC_CLIENT_SECRET: !reset null
+      SERVICEPILOT_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+      SERVICEPILOT_OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:?OIDC_REDIRECT_URI is required}
+      SERVICEPILOT_OIDC_SCOPE: ${OIDC_SCOPE:-openid profile email}
+      SERVICEPILOT_OIDC_ROLE_CLAIM: ${OIDC_ROLE_CLAIM:-roles}
+      SERVICEPILOT_OIDC_CUSTOMER_ROLE: ${OIDC_CUSTOMER_ROLE:-customer}
+      SERVICEPILOT_OIDC_ADMIN_ROLES: ${OIDC_ADMIN_ROLES:-agent,approver,supervisor,audit:read,admin}
+      SERVICEPILOT_OIDC_TENANT_CLAIM: ${AUTH_TENANT_CLAIM:-tenant_id}
+      SERVICEPILOT_OIDC_MFA_CLAIM: ${AUTH_MFA_CLAIM:-amr}
+      SERVICEPILOT_OIDC_MFA_VALUES: ${AUTH_MFA_VALUES:-mfa,otp,webauthn}
+      SERVICEPILOT_OIDC_MFA_REQUIRED: "true"
+    secrets: [session_secret, session_secret_previous, jwt_secret, oidc_client_secret]
     deploy:
       resources:
         limits: { cpus: "1.0", memory: 512M }
@@ -71,9 +99,12 @@ services:
 
 secrets:
   openai_api_key: { file: ./.secrets/openai_api_key }
+  groq_api_key: { file: ./.secrets/groq_api_key }
   database_url: { file: ./.secrets/database_url }
   postgres_password: { file: ./.secrets/postgres_password }
   jwt_secret: { file: ./.secrets/jwt_secret }
+  jwt_secret_previous: { file: ./.secrets/jwt_secret_previous }
   webhook_secret: { file: ./.secrets/webhook_secret }
-  admin_password: { file: ./.secrets/admin_password }
   session_secret: { file: ./.secrets/session_secret }
+  session_secret_previous: { file: ./.secrets/session_secret_previous }
+  oidc_client_secret: { file: ./.secrets/oidc_client_secret }

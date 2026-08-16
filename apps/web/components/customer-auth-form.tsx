@@ -10,7 +10,7 @@ import { PasswordInput } from "@/components/password-input";
 import type { Copy } from "@/lib/i18n";
 import type { Language } from "@/lib/types";
 
-export function CustomerAuthForm({ mode, language, copy, nextPath = "/account" }: { mode: "login" | "register"; language: Language; copy: Copy; nextPath?: string }) {
+export function CustomerAuthForm({ mode, language, copy, nextPath = "/account", ssoEnabled }: { mode: "login" | "register"; language: Language; copy: Copy; nextPath?: string; ssoEnabled?: boolean }) {
 	const router = useRouter();
 	const [pending, setPending] = useState(false); const [error, setError] = useState("");
 	async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -37,10 +37,11 @@ export function CustomerAuthForm({ mode, language, copy, nextPath = "/account" }
 				</Link>
 			</div>
 
-			<h1>{mode === "login" ? copy.account.signIn : copy.account.register}</h1>
-			<p>{copy.account.subtitle}</p>
+		<h1>{mode === "login" ? copy.account.signIn : copy.account.register}</h1>
+		<p>{copy.account.subtitle}</p>
+		{ssoEnabled ? <a className="primary-button" href={`/api/auth/sso/start?next=${encodeURIComponent(nextPath)}`}>{copy.account.sso}</a> : null}
 
-			<form onSubmit={submit}>
+		{!ssoEnabled ? <form onSubmit={submit}>
 				{mode === "register" && (
 					<label>
 						<span>{copy.account.name}</span>
@@ -79,7 +80,7 @@ export function CustomerAuthForm({ mode, language, copy, nextPath = "/account" }
 				<button className="primary-button" disabled={pending} type="submit">
 					{pending ? copy.account.working : mode === "login" ? copy.account.submitLogin : copy.account.submitRegister}
 				</button>
-			</form>
+		</form> : <p className="auth-sso-note">{copy.account.ssoHint}</p>}
 		</section>
 	);
 }

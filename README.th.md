@@ -168,4 +168,6 @@ npm run check
 ## ข้อมูล Repository บน GitHub
 
 - **Repository:** [kingggg5/pilotai](https://github.com/kingggg5/pilotai)
+- คู่มือ production สำหรับ JWT/OIDC SSO, MFA, secret rotation, privacy/quota ของ AI provider, OTel dashboard, alert และ load/security test อยู่ที่ [docs/operations.md](./docs/operations.md)
+- โหมด local ใช้สำหรับพัฒนาเท่านั้น; production บังคับใช้ OIDC SSO พร้อม MFA และไม่มี local admin password
 - โค้ดได้รับการปรับปรุง ตรวจสอบความปลอดภัย และรวมไว้ใน Branch `main` เพียง Branch เดียว พร้อมใช้งานสำหรับการพรีเซนต์และสมัครงาน

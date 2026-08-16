@@ -6,6 +6,12 @@ ServicePilot AI คือแพลตฟอร์มบริการลูก�
 
 ระบบพัฒนาด้วย TypeScript ทั้งส่วนหน้าและส่วนหลัง ใช้ PostgreSQL 17 เป็นฐานข้อมูลหลัก Redis สำหรับ Rate Limiting แบบกระจาย และ Nginx เป็น Reverse Proxy สำหรับทางเข้าหลัก
 
+## ภาพตัวอย่างเว็บ
+
+![หน้าร้านค้า ServicePilot พร้อมสินค้าและการเลือกซื้อ](./docs/images/storefront-demo.png)
+
+![หน้า Admin shared inbox พร้อม transcript แชตและร่างคำตอบจาก AI](./docs/images/staff-workspace-demo.png)
+
 ---
 
 ## ภาพรวมความสามารถของระบบ
@@ -20,7 +26,7 @@ ServicePilot AI คือแพลตฟอร์มบริการลูก�
 - ลูกค้าสามารถเลือกรูปแบบการประมวลผลได้ต่อ Ticket: เจ้าหน้าที่เท่านั้น (Staff Only), ผู้ช่วย AI (Copilot), หรือ AI อัตโนมัติ (Autopilot)
 - ดึงหมายเลขอ้างอิง สอบถามข้อมูลที่ขาดหาย มอบหมายทีมงาน กำหนดลำดับความสำคัญ และปิดเคสความเสี่ยงต่ำที่ยืนยันแล้วอัตโนมัติ
 - หยุดพักคำสั่งที่มีการเขียนข้อมูล (เช่น `create_escalation`) ไว้ชั่วคราวเพื่อรอการอนุมัติจากเจ้าหน้าที่
-- ระบบสลับโมเดล AI อัจฉริยะ (Multi-Model Router): รองรับ Google Gemini (`gemini-flash-latest` ฟรีผ่าน Google AI Studio), OpenAI (`gpt-4o-mini`, `gpt-4o`), และ Anthropic (`claude-3-5-haiku`) พร้อมคำนวณจำนวน Token และประมาณการต้นทุนเป็นบาท (THB)
+- ใช้ขอบเขต Provider ที่ชัดเจน: ค่าเริ่มต้นเป็นโหมด Local แบบ Deterministic, เปลี่ยนไปใช้ OpenAI Responses API หรือ Google Gemini ได้ด้วย `AI_MODE` และปัจจุบันยังไม่มี Anthropic adapter ที่ต่อใช้งานจริง
 - แดชบอร์ดตัวชี้วัดประสิทธิภาพแบบเรียลไทม์ (Operational KPI Dashboard): คำนวณ Zero-Touch Resolution Rate %, อัตราการช่วยเหลือโดยมนุษย์, เวลาและงบประมาณที่ประหยัดได้จริง, คะแนน CSAT และการกระจายตัวของอารมณ์ลูกค้า
 - ระบบสตรีมมิง Server-Sent Events (SSE): สตรีมขั้นตอนการวิเคราะห์ หลักฐานที่พบ และเนื้อหาคำตอบทีละ Token แบบเรียลไทม์
 - ระบบบันทึกฟีดแบ็กจากเจ้าหน้าที่ (Human-in-the-Loop Feedback): บันทึกข้อความที่เจ้าหน้าที่แก้ไขและคะแนนประเมินเพื่อใช้เป็นข้อมูลปรับปรุงโมเดลอย่างต่อเนื่อง
@@ -45,6 +51,10 @@ flowchart LR
 ```
 
 กฎทางธุรกิจทั้งหมดถูกจัดเก็บไว้ใน Layer Services และ Workflow โดยแยกออกจาก Route Handlers และ UI Components ชัดเจน มี Interface Repository ขั้นกลางระหว่าง PostgreSQL กับ Domain Logic เพื่อความง่ายในการทดสอบและบำรุงรักษา
+
+### โมเดลที่ใช้ตอบแชตในแต่ละโหมด
+
+ค่าเริ่มต้นสำหรับ development และ test คือ `AI_MODE=local`: `ts-char-ngram-naive-bayes-v2` ใช้จำแนกหัวข้อ/ความเร่งด่วน, `LocalLanguageModel` ใช้สร้างร่างคำตอบแบบ grounded และ `hash-char-gram-v2` ใช้ทำ embedding ภายในเครื่อง หากตั้ง `AI_MODE=openai` ระบบจะใช้ `OPENAI_MODEL` (ค่าเริ่มต้น `gpt-5.6-luna`) สำหรับร่างคำตอบ หรือ `AI_MODE=gemini` จะใช้ `GEMINI_MODEL` (ค่าเริ่มต้น `gemini-flash-latest`) โดย production บังคับใช้ OpenAI mode และทุก write action ยังต้องผ่าน Policy และการอนุมัติจากมนุษย์
 
 ### โฟลว์การตัดสินใจของ AI (AI Decision Flow)
 
@@ -87,7 +97,7 @@ flowchart TD
 | Frontend Web | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | Backend API | Fastify 5, Zod 4, TypeScript, Node.js 22 |
 | State Machine Orchestrator | LangGraph.js |
-| AI Integration | Google Gemini 3.7 / 1.5 Flash (Free Tier), OpenAI, Anthropic, และ Local Fallback Mode |
+| AI Integration | Local deterministic template (ค่าเริ่มต้น), OpenAI Responses API หรือ Google Gemini API โดยเลือกผ่าน `AI_MODE` |
 | ฐานข้อมูล | PostgreSQL 17, pgvector, Redis 8 |
 | Gateway & Reverse Proxy | Nginx 1.29 |
 | Operations & Telemetry | Docker Compose, OpenTelemetry, GitHub Actions, Promptfoo |
@@ -111,7 +121,7 @@ Copy-Item .env.example .env.local
 เพื่อเปิดใช้งาน AI จริงด้วย Google Gemini ให้ใส่ค่าใน `.env.local`:
 ```env
 AI_MODE=gemini
-GEMINI_API_KEY=AQ.Ab8RN6...ใส่คีย์ของคุณที่นี่
+GEMINI_API_KEY=ใส่คีย์ของคุณที่นี่
 GEMINI_MODEL=gemini-flash-latest
 ```
 
@@ -129,7 +139,7 @@ npm run dev
 | `/account/register` | ลงทะเบียนบัญชีลูกค้าใหม่ |
 | `/account/login` | เข้าสู่ระบบลูกค้า |
 | `/account` | จัดการโปรไฟล์และดูประวัติคำสั่งซื้อ/Ticket |
-| `/support` | แบบฟอร์มเปิด Ticket สำหรับลูกค้า |
+| `/support` | Live chat สำหรับคุยกับ AI, ตรวจคำสั่งซื้อ และขอเจ้าหน้าที่ |
 | `/admin/login` | เข้าสู่ระบบสำหรับเจ้าหน้าที่ |
 | `/admin` | จัดการ Queue, ดู KPI Metrics, ตรวจสอบหลักฐาน AI และอนุมัติเคส |
 | `/admin/audit` | บันทึกประวัติ Audit Log แบบแก้ไขไม่ได้ |

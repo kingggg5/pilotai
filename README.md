@@ -16,7 +16,9 @@ The storefront reads product names, prices, source links, and image paths from P
 
 ### Staff workspace
 
-![Staff ticket queue with AI triage and evidence](./docs/images/staff-workspace.webp)
+![ServicePilot admin shared inbox with chat transcript, AI draft, and evidence review](./docs/images/staff-workspace-demo.png)
+
+The admin queue is a shared inbox: new chat tickets appear in the queue, the transcript is visible beside AI triage, and the draft remains unsent until a staff member reviews it.
 
 ### Filterable audit log
 
@@ -36,7 +38,7 @@ The storefront reads product names, prices, source links, and image paths from P
 - Pauses write actions such as `create_escalation` until a human approves them.
 - Exposes REST/OpenAPI as the primary interface with a thin MCP adapter.
 - Records tenant-scoped, PII-redacted, append-only audit events.
-- Features Multi-Model AI Routing: dynamically selects between Google Gemini (`gemini-flash-latest`), OpenAI (`gpt-4o-mini`, `gpt-4o`), and Anthropic (`claude-3-5-haiku`) with live token count and THB cost estimation per ticket.
+- Uses an explicit provider boundary: local deterministic mode is the default; response drafting can be switched to OpenAI Responses API or Google Gemini with `AI_MODE`, while no Anthropic runtime adapter is enabled.
 - Real-Time Operational KPI Dashboard: tracks Zero-Touch Resolution Rate %, Human-Assisted Rate %, Estimated Hours/Cost Saved in THB, and CSAT sentiment distribution.
 - Live Server-Sent Events (SSE) streaming for real-time AI classification, retrieval evidence, and token generation chunks.
 - Human-in-the-Loop (HITL) Active Learning Feedback loop capturing agent edits and satisfaction ratings for continuous model alignment.
@@ -107,6 +109,10 @@ Green nodes use AI or machine learning. The approval node is a human decision. E
 
 The selected handling mode is persisted with the ticket and audit trail. It never weakens policy: the language model cannot authorize a write action, choose tenant access, or bypass the evidence threshold. See [AI flow and trust boundaries](./docs/ai-flow.md) for the full execution contract.
 
+### Which model answers a chat?
+
+The safe development and test default is `AI_MODE=local`: `ts-char-ngram-naive-bayes-v2` classifies topic/priority, `LocalLanguageModel` drafts a grounded template, and `hash-char-gram-v2` handles local retrieval embeddings. `AI_MODE=openai` uses `OPENAI_MODEL` (default `gpt-5.6-luna`) for drafting, while `AI_MODE=gemini` uses `GEMINI_MODEL` (default `gemini-flash-latest`). Production configuration requires OpenAI mode; all write actions still require deterministic policy checks and human approval.
+
 ## Technology stack
 
 | Layer | Technology |
@@ -114,7 +120,7 @@ The selected handling mode is persisted with the ticket and audit trail. It neve
 | Web | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | API | Fastify 5, Zod 4, TypeScript, Node.js 22 |
 | Workflow | Deterministic LangGraph.js graph |
-| AI Providers | Google Gemini 3.7 / 1.5 Flash (Free Tier), OpenAI, Anthropic, and Local deterministic fallback |
+| AI providers | Local deterministic template (default), OpenAI Responses API, or Google Gemini API; selected by `AI_MODE` |
 | Data | PostgreSQL 17, pgvector, Redis 8 |
 | Gateway | Nginx 1.29 |
 | Operations | Docker Compose, OpenTelemetry, GitHub Actions, Promptfoo |

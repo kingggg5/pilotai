@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { CustomerTicketForm } from "@/components/customer-ticket-form";
+import { LiveSupportChat } from "@/components/customer-ticket-form";
 import { SiteHeader } from "@/components/site-header";
 import { getCustomerSession } from "@/lib/customer-auth";
 import { getCopy, parseLanguage } from "@/lib/i18n";
@@ -29,7 +29,7 @@ export default async function SupportPage({ searchParams }: { searchParams: Prom
 						{copy.customer.steps.map((step, index) => <li key={step}><span>{index + 1}</span>{step}</li>)}
 					</ol>
 				</section>
-				<CustomerTicketForm language={language} copy={copy} profile={{ name: customer.name, email: customer.email }} initialMessage={query.topic === "purchase" ? copy.commerce.requestMessage.replace("{quantity}", quantity) : undefined} />
+				<LiveSupportChat language={language} copy={copy} profile={{ name: customer.name, email: customer.email }} initialMessage={query.topic === "purchase" ? copy.commerce.requestMessage.replace("{quantity}", quantity) : undefined} />
 			</main>
 			<footer className="customer-footer"><strong>ServicePilot</strong><span>{copy.customer.safe}</span></footer>
 		</div>

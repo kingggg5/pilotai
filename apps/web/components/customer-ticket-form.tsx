@@ -3,11 +3,28 @@
 import { useRef, useState } from "react";
 
 import { postJson } from "@/lib/browser-api";
-import type { Copy } from "@/lib/i18n";
+import { localizeStatus, type Copy } from "@/lib/i18n";
 import type { HandlingMode, Language, Run, TicketWorkItem } from "@/lib/types";
 
-type FormState = { customer: string; customerId: string; orderId: string; message: string; handlingMode: HandlingMode };
-const emptyForm: FormState = { customer: "", customerId: "", orderId: "", message: "", handlingMode: "autopilot" };
+type ChatMessage = {
+	id: string;
+	role: "assistant" | "user";
+	text: string;
+	pending?: boolean;
+	error?: boolean;
+	item?: TicketWorkItem;
+};
+
+function orderIdFrom(text: string) {
+	const match = text.match(/\b(?:ORD|ORDER)[-\s]?[A-Z0-9]{4,}\b/i);
+	if (!match) return undefined;
+
+	return match[0].replace(/^ORDER[-\s]?/i, "ORD-").toUpperCase();
+}
+
+function requestsStaff(text: string) {
+	return /เจ้าหน้าที่|พนักงาน|คนจริง|human|agent|specialist|representative/i.test(text);
+}
 
 function workflowMessage(run: Run, copy: Copy): string {
 	if (run.automation.mode === "manual_queue") return copy.customer.manualQueued;
@@ -20,121 +37,117 @@ function workflowMessage(run: Run, copy: Copy): string {
 	return copy.customer.processing;
 }
 
-export function CustomerTicketForm({ language, copy, profile, initialMessage = "" }: { language: Language; copy: Copy; profile?: { name: string; email: string }; initialMessage?: string }) {
-	const initialForm = { ...emptyForm, customer: profile?.name || "", customerId: profile?.email || "", message: initialMessage };
-	const [form, setForm] = useState<FormState>(initialForm);
-	const [result, setResult] = useState<TicketWorkItem>();
-	const [error, setError] = useState("");
+function messageText(item: TicketWorkItem, copy: Copy) {
+	const status = workflowMessage(item.run, copy);
+	return item.run.draft && item.run.draft !== status ? `${status}\n\n${item.run.draft}` : status;
+}
+
+export function LiveSupportChat({ language, copy, profile, initialMessage = "" }: { language: Language; copy: Copy; profile?: { name: string; email: string }; initialMessage?: string }) {
+	const [draft, setDraft] = useState(initialMessage);
+	const [messages, setMessages] = useState<ChatMessage[]>([{ id: "welcome", role: "assistant", text: copy.customer.chatGreeting }]);
 	const [pending, setPending] = useState(false);
+	const [error, setError] = useState("");
 	const idempotencyKey = useRef(crypto.randomUUID());
 
-	function update<Field extends keyof FormState>(field: Field, value: FormState[Field]) {
-		setForm((current) => ({ ...current, [field]: value }));
-	}
-
-	async function submit(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		if (!form.customer.trim() || !form.customerId.trim() || form.message.trim().length < 3) {
+	async function sendMessage(value: string, handlingMode?: HandlingMode) {
+		if (pending) return;
+		const text = value.trim();
+		if (text.length < 3) {
 			setError(copy.customer.required);
 			return;
 		}
-		setPending(true);
+
+		const userMessage: ChatMessage = { id: crypto.randomUUID(), role: "user", text };
+		const pendingId = crypto.randomUUID();
+		setMessages((current) => [...current, userMessage, { id: pendingId, role: "assistant", text: copy.customer.chatTyping, pending: true }]);
+		setDraft("");
 		setError("");
+		setPending(true);
+
 		try {
-			const payload = await postJson<{ item?: TicketWorkItem }>("/api/tickets", {
-				...form,
-				channel: "web",
+			const item = await postJson<{ item?: TicketWorkItem }>("/api/tickets", {
+				customer: profile?.name || "",
+				customerId: profile?.email || "",
+				orderId: orderIdFrom(text),
+				message: text,
+				channel: "chat",
 				locale: language,
+				handlingMode: handlingMode || (requestsStaff(text) ? "manual" : "autopilot"),
 				idempotencyKey: idempotencyKey.current,
 			});
-			if (!payload.item) throw new Error(copy.customer.failed);
-			setResult(payload.item);
-		} catch (reason) {
-			setError(reason instanceof Error ? reason.message : copy.customer.failed);
+			if (!item.item) throw new Error(copy.customer.failed);
+
+			setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, pending: false, text: messageText(item.item!, copy), item: item.item } : message));
+			idempotencyKey.current = crypto.randomUUID();
+		} catch {
+			const message = copy.customer.failed;
+			setMessages((current) => current.map((item) => item.id === pendingId ? { ...item, pending: false, error: true, text: message } : item));
+			setError(message);
 		} finally {
 			setPending(false);
 		}
 	}
 
-	if (result) {
-		const { ticket, run } = result;
-		return (
-			<section className="conversation-card result-card" aria-live="polite">
-				<div className="result-mark" aria-hidden="true">✓</div>
-				<p className="section-label">{copy.customer.received}</p>
-				<h2>{ticket.reference}</h2>
-				<p className="result-summary">{workflowMessage(run, copy)}</p>
-				<dl className="result-meta">
-					<div><dt>{copy.customer.reference}</dt><dd>{ticket.reference}</dd></div>
-					{ticket.orderId ? <div><dt>{copy.customer.order}</dt><dd>{ticket.orderId}</dd></div> : null}
-					<div><dt>{copy.customer.handlingTitle}</dt><dd>{copy.customer.handlingModes[run.automation.handlingMode].title}</dd></div>
-				</dl>
-				{run.draft ? (
-					<div className="support-reply">
-						<span>ServicePilot</span>
-						<p>{run.draft}</p>
-					</div>
-				) : null}
-				{run.evidence.length ? (
-					<div className="customer-sources">
-						<strong>{copy.customer.evidence}</strong>
-						{run.evidence.slice(0, 3).map((item) => <span key={item.id}>{item.title} · {item.section}</span>)}
-					</div>
-				) : null}
-				<button className="primary-button" type="button" onClick={() => { setResult(undefined); setForm(initialForm); idempotencyKey.current = crypto.randomUUID(); }}>
-					{copy.customer.reset}
-				</button>
-			</section>
-		);
+	function submit(event: React.FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		void sendMessage(draft);
 	}
 
-	const quickTopics = language === "th" ? [
-		{ label: "ติดตามพัสดุ", template: "สวัสดีครับ อยากทราบสถานะการจัดส่งและติดตามพัสดุของคำสั่งซื้อครับ" },
-		{ label: "ขอคืนสินค้า / คืนเงิน", template: "สวัสดีครับ ต้องการสอบถามขั้นตอนการขอคืนสินค้าและเงื่อนไขการคืนเงินครับ" },
-		{ label: "สอบถามข้อมูลสินค้า", template: "สวัสดีครับ ต้องการสอบถามรายละเอียดสเปกและความจุของสินค้าเพิ่มเติมครับ" },
-		{ label: "ปัญหาการชำระเงิน", template: "สวัสดีครับ ชำระเงินแล้วแต่สถานะยังไม่ปรับปรุง รบกวนช่วยตรวจสอบให้หน่อยครับ" },
-	] : [
-		{ label: "Track Order", template: "Hello, could you please check the shipping status for my order?" },
-		{ label: "Return & Refund", template: "Hello, I would like to know the return policy and refund process." },
-		{ label: "Product Specs", template: "Hello, I have a question regarding product specifications and availability." },
-		{ label: "Payment Support", template: "Hello, I completed the payment but haven't received confirmation yet." },
-	];
+	function quickReply(text: string, handlingMode?: HandlingMode) {
+		void sendMessage(text, handlingMode);
+	}
+
+	function reset() {
+		setMessages([{ id: "welcome", role: "assistant", text: copy.customer.chatGreeting }]);
+		setDraft("");
+		setError("");
+		idempotencyKey.current = crypto.randomUUID();
+	}
 
 	return (
-		<section className="conversation-card" aria-labelledby="ticket-form-title">
-			<p className="section-label">{copy.customer.formTitle}</p>
-			<h2 id="ticket-form-title">{copy.customer.formIntro}</h2>
-			<form onSubmit={submit} noValidate>
-				<div className="field-grid">
-					<label><span>{copy.customer.name}</span><input required readOnly={Boolean(profile)} maxLength={128} autoComplete="name" value={form.customer} onChange={(event) => update("customer", event.target.value)} /></label>
-					<label><span>{copy.customer.contact}</span><input required readOnly={Boolean(profile)} maxLength={128} autoComplete="email" value={form.customerId} onChange={(event) => update("customerId", event.target.value)} /></label>
-				</div>
-				<label><span>{copy.customer.order}</span><input maxLength={128} autoComplete="off" placeholder={language === "th" ? "เลขคำสั่งซื้อ (ถ้ามี)" : "Order number (optional)"} value={form.orderId} onChange={(event) => update("orderId", event.target.value)} /></label>
-
-				<div className="quick-topics" aria-label="Suggested topics">
-					<span className="quick-topics-label">{language === "th" ? "หัวข้อยอดนิยม (คลิกเพื่อกรอกอัตโนมัติ):" : "Quick Topics (click to pre-fill):"}</span>
-					<div className="quick-pills">
-						{quickTopics.map((item) => (
-							<button
-								key={item.label}
-								type="button"
-								className="pill-btn"
-								onClick={() => update("message", item.template)}
-							>
-								{item.label}
-							</button>
-						))}
-					</div>
-				</div>
-
-				<label>
-					<span>{copy.customer.message}</span>
-					<textarea required maxLength={8_000} rows={7} placeholder={copy.customer.messagePlaceholder} value={form.message} onChange={(event) => update("message", event.target.value)} />
-					<small>{form.message.length.toLocaleString()} / 8,000</small>
-				</label>
+		<section className="conversation-card chat-card" aria-labelledby="chat-title">
+			<header className="chat-header">
+				<div><p className="section-label">{copy.customer.chatTitle}</p><h2 id="chat-title">{copy.customer.chatIntro}</h2></div>
+				<span className="chat-status"><i />{language === "th" ? "AI พร้อมช่วย" : "AI is ready"}</span>
+			</header>
+			<div className="chat-log" role="log" aria-live="polite" aria-relevant="additions" aria-busy={pending} aria-label={copy.customer.chatTitle}>
+				{messages.map((message) => <ChatMessageView key={message.id} message={message} copy={copy} />)}
+			</div>
+			<div className="chat-quick-actions" aria-label={language === "th" ? "ตัวเลือกด่วน" : "Quick actions"}>
+				<button type="button" disabled={pending} onClick={() => quickReply(language === "th" ? "ช่วยตรวจสอบสถานะคำสั่งซื้อให้หน่อยครับ" : "Please check my order status.")}>{copy.customer.chatOrder}</button>
+				<button type="button" disabled={pending} onClick={() => quickReply(language === "th" ? "พบปัญหากับคำสั่งซื้อหรือการชำระเงินครับ" : "I have an issue with my order or payment.")}>{copy.customer.chatIssue}</button>
+				<button type="button" disabled={pending} onClick={() => quickReply(language === "th" ? "ต้องการคุยกับเจ้าหน้าที่ครับ" : "I would like to talk to a specialist.", "manual")}>{copy.customer.chatStaff}</button>
+			</div>
+			<form className="chat-composer" onSubmit={submit} noValidate>
+				<label className="sr-only" htmlFor="support-message">{copy.customer.message}</label>
+				<textarea id="support-message" required disabled={pending} maxLength={8_000} rows={3} placeholder={copy.customer.chatInputPlaceholder} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(draft); } }} />
+				<div className="chat-composer-footer"><small>{draft.length.toLocaleString()} / 8,000 · {language === "th" ? "กด Enter เพื่อส่ง · Shift + Enter ขึ้นบรรทัดใหม่" : "Enter to send · Shift + Enter for a new line"}</small><button className="primary-button" disabled={pending || draft.trim().length < 3} type="submit">{pending ? copy.customer.chatTyping : copy.customer.chatSend}<span aria-hidden="true">→</span></button></div>
 				{error ? <p className="form-error" role="alert">{error}</p> : null}
-				<button className="primary-button" disabled={pending} type="submit">{pending ? copy.customer.sending : copy.customer.send}<span aria-hidden="true">→</span></button>
 			</form>
+			<button className="chat-reset" type="button" onClick={reset}>{copy.customer.chatNew}</button>
 		</section>
+	);
+}
+
+function ChatMessageView({ message, copy }: { message: ChatMessage; copy: Copy }) {
+	return (
+		<div className={`chat-message chat-message-${message.role}`}>
+			<div className="chat-avatar" aria-hidden="true">{message.role === "assistant" ? "✳" : "คุณ"}</div>
+			<article className={`chat-bubble${message.error ? " chat-bubble-error" : ""}`}>
+				<p>{message.text}</p>
+				{message.pending ? <span className="chat-typing" aria-hidden="true"><i /><i /><i /></span> : null}
+				{message.item ? <ChatTicketStatus item={message.item} copy={copy} /> : null}
+			</article>
+		</div>
+	);
+}
+
+function ChatTicketStatus({ item, copy }: { item: TicketWorkItem; copy: Copy }) {
+	return (
+		<div className="chat-ticket-status">
+			<div className="chat-ticket-heading"><strong>ServicePilot</strong><span>{localizeStatus(copy, item.ticket.status)}</span></div>
+			<dl><div><dt>{copy.customer.chatReference}</dt><dd>{item.ticket.reference}</dd></div>{item.ticket.orderId ? <div><dt>{copy.customer.chatOrderDetected}</dt><dd>{item.ticket.orderId}</dd></div> : null}<div><dt>{copy.customer.handlingTitle}</dt><dd>{copy.customer.handlingModes[item.run.automation.handlingMode].title}</dd></div></dl>
+			{item.run.evidence.length ? <small>{copy.customer.evidence}: {item.run.evidence.slice(0, 2).map((evidence) => evidence.title).join(" · ")}</small> : null}
+		</div>
 	);
 }

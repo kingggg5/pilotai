@@ -42,8 +42,10 @@ async function ensureCustomerAccount(actor: Pick<Principal, "subject" | "tenant_
 		tenant_id: actor.tenant_id,
 		name,
 		email,
-		phone: actor.phone && actor.phone.length >= 7 ? actor.phone : "0000000000",
-		password_hash: "local-bypass",
+		phone: actor.phone && actor.phone.length >= 7 ? actor.phone : "",
+		// OIDC accounts are provisioned just-in-time from verified identity-provider
+		// claims; passwords only exist for locally registered customers.
+		password_hash: "oidc-managed",
 		created_at: now,
 		updated_at: now,
 	};

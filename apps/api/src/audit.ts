@@ -14,6 +14,7 @@ export const AuditActions = {
 	workflowStarted: "workflow.started",
 	approvalApproved: "approval.approved",
 	approvalRejected: "approval.rejected",
+	approvalReauthorized: "approval.reauthorized",
 	ticketCreated: "ticket.created",
 	ticketUpdated: "ticket.updated",
 	handlingModeSelected: "workflow.handling_mode_selected",

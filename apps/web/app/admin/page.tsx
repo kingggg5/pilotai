@@ -10,9 +10,10 @@ import { redirect } from "next/navigation";
 import { AdminHeader } from "@/components/admin-header";
 import { AdminWorkspace } from "@/components/admin-workspace";
 import { hasAdminSession } from "@/lib/admin-auth";
-import { getConsoleData } from "@/lib/api";
+import { getConsoleData, getKpiAnalytics } from "@/lib/api";
 import { getCopy, parseLanguage } from "@/lib/i18n";
 import { parseQueueFilters } from "@/lib/queue-filters";
+import type { KpiAnalytics } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +26,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 	if (!await hasAdminSession()) redirect(`/admin/login?lang=${language}`);
 	const copy = getCopy(language);
 	const data = await getConsoleData((page - 1) * 50, 50, filters);
+	let kpi: KpiAnalytics | null = null;
+	try {
+		kpi = await getKpiAnalytics();
+	} catch {
+		kpi = null;
+	}
 	return (
 		<div className="admin-page">
 			<AdminHeader copy={copy} language={language} current="queue" />
 			<section className="admin-heading"><div><h1>{copy.admin.title}</h1><p>{copy.admin.subtitle}</p></div><span><i />{copy.admin.live}</span></section>
-			<AdminWorkspace key={`${page}-${data.checkedAt}`} initialData={data} copy={copy} language={language} filters={filters} />
+			<AdminWorkspace key={`${page}-${data.checkedAt}`} initialData={data} kpi={kpi} copy={copy} language={language} filters={filters} />
 		</div>
 	);
 }

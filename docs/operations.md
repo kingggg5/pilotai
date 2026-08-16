@@ -22,14 +22,21 @@ External drafting is disabled unless `AI_EXTERNAL_EGRESS_ALLOWED=true` is explic
 
 ## OTel, metrics, and alerting
 
-Start the optional observability stack with `npm run deploy -- --observability` after creating `.secrets/grafana_admin_password`. The API exports OTLP traces and metrics to the collector, and `/metrics` exposes bounded Prometheus counters. Grafana is bound to localhost by the overlay; put it behind an authenticated VPN or SSO before exposing it. Prometheus alerts cover API downtime, error rate, approval backlog, and p95 latency. Assign an on-call owner and link the alert to this runbook.
+Start the optional observability stack with `npm run deploy -- --observability` after creating `.secrets/grafana_admin_password`. The API exports OTLP traces and metrics to the collector, and `/metrics` exposes bounded Prometheus counters and gauges (counters must stay counter-typed so `rate()` alerts survive process restarts). Grafana is bound to localhost by the overlay; put it behind an authenticated VPN or SSO before exposing it. Prometheus alerts cover API downtime, error rate, approval backlog, and p95 latency. Assign an on-call owner and link the alert to this runbook.
+
+## Human approval expiry and escalation notifications
+
+Approval prompts carry an `expires_at` window (`APPROVAL_TTL_MINUTES`, default 30). A decision submitted after expiry is rejected with `409 APPROVAL_EXPIRED` and no write is performed; an approver must call `POST /api/v1/runs/:threadId/reauthorize` to open a fresh window before deciding. Approval, rejection, and re-authorization are audited with the reviewer identity and a fingerprint of the approved draft.
+
+When `ESCALATION_WEBHOOK_URL` is set, every escalation created after a human approval is announced to that endpoint with an HMAC-SHA256 signature header (`X-ServicePilot-Signature`) derived from `WEBHOOK_SECRET`. Delivery is fire-and-forget with a bounded timeout; failures are logged and never block the workflow. Point it at a chat ops webhook (Slack/Teams bridge, PagerDuty Events API, or an internal dispatcher) and keep the receiver idempotent per `escalation_id`.
 
 ## Load and security checks
 
-Run a bounded health load test against staging:
+Run a bounded load test against staging. The `assist` scenario exercises the authenticated workflow path (`POST /api/v1/assist` with actor/tenant headers, or `LOAD_TEST_TOKEN` for bearer auth); `health` only probes liveness:
 
 ```powershell
 $env:LOAD_TEST_URL = "https://staging.example.com"
+$env:LOAD_TEST_SCENARIO = "assist"
 $env:LOAD_TEST_CONCURRENCY = "10"
 npm run load:test
 ```

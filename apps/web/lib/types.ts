@@ -35,7 +35,7 @@ export interface TraceStep {
 	id: string;
 	title: string;
 	detail: string;
-	status: "complete" | "active" | "pending";
+	status: "complete" | "active" | "pending" | "skipped";
 }
 
 export interface Evidence {

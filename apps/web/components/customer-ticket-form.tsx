@@ -75,6 +75,7 @@ export function LiveSupportChat({ language, copy, profile, history = [], initial
 	const [error, setError] = useState("");
 	const idempotencyKey = useRef(crypto.randomUUID());
 	const logRef = useRef<HTMLDivElement>(null);
+	const streamInFlight = useRef(false);
 
 	useEffect(() => {
 		const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -111,14 +112,73 @@ export function LiveSupportChat({ language, copy, profile, history = [], initial
 			});
 			if (!item.item) throw new Error(copy.customer.failed);
 
-			setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, pending: false, text: messageText(item.item!, copy), createdAt: new Date().toISOString(), item: item.item } : message));
+			const workItem = item.item;
+			const fullText = messageText(workItem, copy);
+			const status = workflowMessage(workItem.run, copy);
 			idempotencyKey.current = crypto.randomUUID();
+			if (workItem.run.draft && !window.matchMedia("(prefers-reduced-motion: reduce)").matches && !streamInFlight.current) {
+				await streamReply(pendingId, workItem, status, fullText);
+			} else {
+				setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, pending: false, text: fullText, createdAt: new Date().toISOString(), item: workItem } : message));
+			}
 		} catch (reason) {
 			const message = reason instanceof Error && reason.message ? reason.message : copy.customer.failed;
 			setMessages((current) => current.map((item) => item.id === pendingId ? { ...item, pending: false, error: true, text: message, retryText: text, retryMode: handlingMode } : item));
 			setError(message);
 		} finally {
 			setPending(false);
+		}
+	}
+
+	async function streamReply(pendingId: string, item: TicketWorkItem, status: string, fullText: string) {
+		streamInFlight.current = true;
+		const prefix = item.run.draft && item.run.draft !== status ? `${status}\n\n` : "";
+		const finalize = () => setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, pending: false, text: fullText, createdAt: new Date().toISOString(), item } : message));
+		const reveal = (text: string) => setMessages((current) => current.map((message) => message.id === pendingId ? { ...message, text } : message));
+		let received = "";
+
+		try {
+			const response = await fetch(`/api/tickets/${encodeURIComponent(item.ticket.id)}/stream`);
+			if (!response.ok || !response.body) throw new Error("Stream unavailable");
+			const reader = response.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = "";
+			for (;;) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
+				let boundary = buffer.indexOf("\n\n");
+				while (boundary !== -1) {
+					const frame = buffer.slice(0, boundary);
+					buffer = buffer.slice(boundary + 2);
+					boundary = buffer.indexOf("\n\n");
+					for (const line of frame.split("\n")) {
+						if (!line.startsWith("data:")) continue;
+						const payload = line.slice(5).trim();
+						if (!payload) continue;
+						let event: { title?: unknown; chunk?: unknown; status?: unknown };
+						try {
+							event = JSON.parse(payload) as typeof event;
+						} catch {
+							continue;
+						}
+						if (typeof event.chunk === "string") {
+							received += event.chunk;
+							reveal(`${prefix}${received}`);
+						} else if (event.status !== undefined) {
+							finalize();
+							return;
+						} else if (typeof event.title === "string" && !received) {
+							reveal(event.title);
+						}
+					}
+				}
+			}
+			finalize();
+		} catch {
+			finalize();
+		} finally {
+			streamInFlight.current = false;
 		}
 	}
 

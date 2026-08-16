@@ -315,7 +315,7 @@ Evaluation reports include Macro-F1, precision, recall, confusion data, Recall@K
 
 ## AI roadmap
 
-The first automation increment now adds a per-ticket Staff / Copilot / Autopilot choice, extracts references, asks missing-information questions, routes teams, sets priority/tags, records mode and automation audit events, and auto-resolves only low-risk requests backed by verified evidence. The next improvements are grounded staff summaries, duplicate detection, reviewer feedback, and production cost/latency monitoring. The model never chooses tenant access or authorizes a high-risk write. See [the AI roadmap](./docs/ai-roadmap.md) and run the baseline with:
+The first automation increment now adds a per-ticket Staff / Copilot / Autopilot choice, extracts references, asks missing-information questions, routes teams, sets priority/tags, records mode and automation audit events, and auto-resolves only low-risk requests backed by verified evidence. Reviewer feedback is captured from the workbench, every run carries a server-side trace with latency and token estimates, approval windows expire and must be re-authorized, and escalations can announce themselves to a signed webhook. The next improvements are grounded staff summaries, duplicate detection, and per-provider cost accounting. The model never chooses tenant access or authorizes a high-risk write. See [the AI roadmap](./docs/ai-roadmap.md) and run the baseline with:
 
 ```sh
 npm run ai:eval

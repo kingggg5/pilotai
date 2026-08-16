@@ -114,6 +114,7 @@ export type AutomationResult = z.infer<typeof AutomationResult>;
 export const ApprovalPrompt = z.object({
 	type: z.literal("human_approval").default("human_approval"), reasons: z.array(z.string()),
 	risk_level: RiskLevel, draft: z.string(),
+	expires_at: z.string().datetime().nullable().optional(),
 });
 export const ApprovalRecord = z.object({
 	decision: z.enum(["approve", "reject"]), feedback: z.string().max(2_000).nullable().optional(),
@@ -134,12 +135,26 @@ export const ApprovalResumeRequest = z.object({
 });
 export const DecisionRequest = z.object({ decision: z.enum(["approve", "reject"]), note: z.string().max(2_000).nullable().optional() });
 
+export const TraceStep = z.object({
+	id: z.string().min(1).max(64), title: z.string().min(1).max(200), detail: z.string().max(500),
+	status: z.enum(["complete", "active", "skipped"]),
+});
+export type TraceStep = z.infer<typeof TraceStep>;
+
+export const RunUsage = z.object({
+	latency_ms: z.number().int().nonnegative(),
+	input_tokens_estimate: z.number().int().nonnegative(),
+	output_tokens_estimate: z.number().int().nonnegative(),
+});
+export type RunUsage = z.infer<typeof RunUsage>;
+
 export const AssistResponse = z.object({
 	thread_id: z.string(), status: WorkflowStatus, classification: ClassificationResult,
 	retrieval: RetrievalResult, draft: z.string(), policy: PolicyDecision,
 	entities: ExtractedEntities, automation: AutomationResult,
 	approval: z.union([ApprovalPrompt, ApprovalRecord]).nullable().optional(), answer: z.string().nullable().optional(),
 	escalation_id: z.string().nullable().optional(), trace_id: z.string().nullable().optional(), provider: z.string(),
+	trace: z.array(TraceStep).max(24).optional(), usage: RunUsage.optional(),
 });
 export type AssistResponse = z.infer<typeof AssistResponse>;
 
@@ -259,17 +274,6 @@ export const TicketFeedbackRequest = z.object({
 	notes: z.string().max(2000).optional(),
 });
 export type TicketFeedbackRequest = z.infer<typeof TicketFeedbackRequest>;
-
-export const ModelRoutingInfo = z.object({
-	model: z.string(),
-	provider: z.string(),
-	reason: z.string(),
-	estimated_input_tokens: z.number().int().nonnegative(),
-	estimated_output_tokens: z.number().int().nonnegative(),
-	estimated_cost_usd: z.number().nonnegative(),
-	estimated_cost_thb: z.number().nonnegative(),
-});
-export type ModelRoutingInfo = z.infer<typeof ModelRoutingInfo>;
 
 export const AnalyticsKPI = z.object({
 	total_tickets: z.number().int().nonnegative(),

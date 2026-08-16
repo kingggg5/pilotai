@@ -69,6 +69,7 @@ type ApiRun = {
 	automation?: { handling_mode?: Run["automation"]["handlingMode"]; mode: Run["automation"]["mode"]; assigned_team: string; next_question?: string | null; actions: Run["automation"]["actions"] };
 	approval?: { decision?: Decision; reviewer?: string };
 	escalation_id?: string;
+	trace?: { id: string; title: string; detail: string; status: "complete" | "active" | "skipped" }[];
 	provider: string;
 };
 
@@ -198,7 +199,7 @@ function toRun(run: ApiRun, ticketId: string): Run {
 			sufficientEvidence: run.retrieval.sufficient_evidence,
 			topScore: run.retrieval.top_score,
 		},
-		trace: [
+		trace: run.trace?.length ? run.trace : [
 			{ id: "classify", title: "Classified request", detail: `${run.classification.category} • ${run.classification.priority}`, status: "complete" },
 			{ id: "extract", title: "Extracted request data", detail: run.entities?.order_id || run.entities?.refund_id || "No reference found", status: "complete" },
 			{ id: "retrieve", title: "Checked authorized sources", detail: `${evidence.length} sources`, status: "complete" },
@@ -353,7 +354,7 @@ export async function getAuditEvents(filters: AuditFilters): Promise<AuditData> 
 	}
 }
 
-export async function getKpiAnalytics(): Promise<KpiAnalytics> {
+export async function getKpiAnalytics(): Promise<KpiAnalytics | null> {
 	try {
 		const payload = await request<{
 			total_tickets: number;
@@ -382,17 +383,7 @@ export async function getKpiAnalytics(): Promise<KpiAnalytics> {
 			},
 		};
 	} catch {
-		return {
-			totalTickets: 0,
-			resolvedTickets: 0,
-			zeroTouchRate: 0,
-			humanAssistedRate: 0,
-			avgConfidence: 0,
-			estimatedHoursSaved: 0,
-			estimatedCostSavedThb: 0,
-			csatScore: 0,
-			sentimentDistribution: { positive: 0, neutral: 0, urgentDispute: 0 },
-		};
+		return null;
 	}
 }
 

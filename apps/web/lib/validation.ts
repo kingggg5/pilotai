@@ -38,3 +38,15 @@ export function parseDecision(value: unknown): { runId: string; decision: Decisi
 	if (!runId || !decision || note.length > limits.note) return null;
 	return { runId, decision, ...(note ? { note } : {}) };
 }
+
+export function parseTicketFeedback(value: unknown): { ticketId: string; feedbackType: "thumbs_up" | "thumbs_down" | "edited_reply"; rating?: number; notes?: string } | null {
+	if (!value || typeof value !== "object") return null;
+	const body = value as Record<string, unknown>;
+	const ticketId = typeof body.ticketId === "string" ? body.ticketId.trim() : "";
+	const feedbackType = body.feedbackType === "thumbs_up" || body.feedbackType === "thumbs_down" || body.feedbackType === "edited_reply" ? body.feedbackType : null;
+	const rating = typeof body.rating === "number" && Number.isInteger(body.rating) && body.rating >= 1 && body.rating <= 5 ? body.rating : undefined;
+	const notes = typeof body.notes === "string" ? body.notes.trim() : "";
+	if (!ticketId || !feedbackType || notes.length > limits.note) return null;
+	if (body.rating !== undefined && rating === undefined) return null;
+	return { ticketId, feedbackType, ...(rating ? { rating } : {}), ...(notes ? { notes } : {}) };
+}

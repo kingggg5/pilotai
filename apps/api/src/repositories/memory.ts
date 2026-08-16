@@ -11,40 +11,43 @@ function tokens(text: string) {
 	return new Set([...words, ...thai]);
 }
 
-function cosine(left: readonly number[], right: readonly number[]) {
-	const dot = left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
-	return dot / ((Math.hypot(...left) || 1) * (Math.hypot(...right) || 1));
-}
-
 const tenantKey = (tenantId: string, id: string) => `${tenantId}:${id}`;
+
+type KnowledgeEntry = { document: KnowledgeDocumentUpsert; tenantId: string; vector: number[]; norm: number; tokenSet: Set<string> };
 
 export class MemoryKnowledgeRepository implements KnowledgeRepository {
 	readonly backend = "memory";
-	readonly #documents: Array<KnowledgeDocumentUpsert & { tenant_id: string }> = [];
+	readonly #entries: KnowledgeEntry[] = [];
 	constructor(readonly embedder: Embedder) {}
 
 	async search(query: string, topK: number, tenantId: string, _roles: readonly string[] = []): Promise<EvidenceDocument[]> {
-		const documents = this.#documents.filter((document) => !("tenant_id" in document) || document.tenant_id === tenantId);
-		const [queryVector, ...vectors] = await this.embedder.embed([query, ...documents.map((document) => `${document.title} ${document.content}`)]);
+		// Document vectors, norms, and token sets are precomputed at upsert so a
+		// search only embeds the query itself instead of the whole corpus.
+		const entries = this.#entries.filter((entry) => entry.tenantId === tenantId);
+		if (!entries.length) return [];
+		const [queryVector] = await this.embedder.embed([query]);
+		const queryNorm = Math.hypot(...queryVector!) || 1;
 		const queryTokens = tokens(query);
-		return documents.map((document, index) => {
-			const documentTokens = tokens(`${document.title} ${document.content}`);
-			const lexical = [...queryTokens].filter((token) => documentTokens.has(token)).length / Math.max(1, queryTokens.size);
-			const semantic = Math.max(0, cosine(queryVector!, vectors[index]!));
-			const pageLabel = document.page_label ?? "Document";
+		return entries.map((entry) => {
+			const lexical = [...queryTokens].filter((token) => entry.tokenSet.has(token)).length / Math.max(1, queryTokens.size);
+			const dot = queryVector!.reduce((sum, value, index) => sum + value * (entry.vector[index] ?? 0), 0);
+			const semantic = Math.max(0, dot / (queryNorm * entry.norm));
+			const pageLabel = entry.document.page_label ?? "Document";
 			return {
-				id: document.id, title: document.title, content: document.content, source: document.source,
-				page_number: document.page_number, page_label: pageLabel, citation: `${document.title} — ${pageLabel}`,
-				score: Number(Math.min(1, lexical * 0.7 + semantic * 0.3).toFixed(6)), metadata: document.metadata,
+				id: entry.document.id, title: entry.document.title, content: entry.document.content, source: entry.document.source,
+				page_number: entry.document.page_number, page_label: pageLabel, citation: `${entry.document.title} — ${pageLabel}`,
+				score: Number(Math.min(1, lexical * 0.7 + semantic * 0.3).toFixed(6)), metadata: entry.document.metadata,
 			};
 		}).sort((left, right) => right.score - left.score || left.id.localeCompare(right.id)).slice(0, topK);
 	}
 
 	async upsert(document: KnowledgeDocumentUpsert, tenantId: string) {
-		const index = this.#documents.findIndex((item) => item.id === document.id && "tenant_id" in item && item.tenant_id === tenantId);
-		const stored = { ...document, tenant_id: tenantId };
-		if (index >= 0) this.#documents[index] = stored;
-		else this.#documents.push(stored);
+		const index = this.#entries.findIndex((entry) => entry.document.id === document.id && entry.tenantId === tenantId);
+		const text = `${document.title} ${document.content}`;
+		const [vector] = await this.embedder.embed([text]);
+		const entry: KnowledgeEntry = { document, tenantId, vector: vector!, norm: Math.hypot(...vector!) || 1, tokenSet: tokens(text) };
+		if (index >= 0) this.#entries[index] = entry;
+		else this.#entries.push(entry);
 	}
 }
 
@@ -73,12 +76,8 @@ export class MemoryRunRepository implements RunRepository {
 	async save(run: AssistResponse, tenantId: string) { this.#runs.set(tenantKey(tenantId, run.thread_id), structuredClone(run)); }
 	async get(id: string, tenantId: string) { const run = this.#runs.get(tenantKey(tenantId, id)); return run ? structuredClone(run) : undefined; }
 	async getMany(ids: readonly string[], tenantId: string) {
-		const entries: (readonly [string, AssistResponse])[] = [];
-		for (const id of ids) {
-			const item = await this.get(id, tenantId);
-			if (item) entries.push([id, item] as const);
-		}
-		return new Map(entries);
+		const items = await Promise.all(ids.map(async (id) => [id, await this.get(id, tenantId)] as const));
+		return new Map(items.filter((entry): entry is readonly [string, AssistResponse] => Boolean(entry[1])));
 	}
 	async health() { return true; }
 }
@@ -100,24 +99,29 @@ export class MemoryTicketRepository implements TicketRepository {
 		const term = filters.query?.toLocaleLowerCase() ?? "";
 		const number = filters.number?.toLocaleLowerCase() ?? "";
 		const priorityRank: Record<Priority, number> = { urgent: 4, high: 3, normal: 2, low: 1 };
-		const items = [...this.#tickets.entries()]
-			.filter(([key]) => key.startsWith(`${tenantId}:`))
-			.map(([, ticket]) => structuredClone(ticket))
-			.filter((ticket) => `${ticket.id} ${ticket.reference} ${ticket.subject} ${ticket.customer} ${ticket.customer_id ?? ""} ${ticket.customer_email ?? ""} ${ticket.customer_phone ?? ""} ${ticket.order_id ?? ""} ${ticket.summary}`.toLocaleLowerCase().includes(term))
-			.filter((ticket) => !number || `${ticket.id} ${ticket.reference} ${ticket.order_id ?? ""}`.toLocaleLowerCase().includes(number))
-			.filter((ticket) => !filters.priority || ticket.priority === filters.priority)
-			.filter((ticket) => !filters.status || ticket.status === filters.status)
-			.filter((ticket) => !filters.channel || ticket.channel === filters.channel)
-			.filter((ticket) => !filters.handlingMode || ticket.handling_mode === filters.handlingMode)
-			.filter((ticket) => !filters.createdFrom || ticket.created_at.slice(0, 10) >= filters.createdFrom)
-			.filter((ticket) => !filters.createdTo || ticket.created_at.slice(0, 10) <= filters.createdTo)
-			.filter((ticket) => !filters.customerId || ticket.customer_id === filters.customerId)
+		// Filter and sort the stored tickets (read-only) and clone only the
+		// returned page, so a queue request no longer clones every ticket.
+		const matches = ([key, ticket]: [string, TicketSummary]) => {
+			if (!key.startsWith(`${tenantId}:`)) return false;
+			if (term && !`${ticket.id} ${ticket.reference} ${ticket.subject} ${ticket.customer} ${ticket.customer_id ?? ""} ${ticket.customer_email ?? ""} ${ticket.customer_phone ?? ""} ${ticket.order_id ?? ""} ${ticket.summary}`.toLocaleLowerCase().includes(term)) return false;
+			if (number && !`${ticket.id} ${ticket.reference} ${ticket.order_id ?? ""}`.toLocaleLowerCase().includes(number)) return false;
+			if (filters.priority && ticket.priority !== filters.priority) return false;
+			if (filters.status && ticket.status !== filters.status) return false;
+			if (filters.channel && ticket.channel !== filters.channel) return false;
+			if (filters.handlingMode && ticket.handling_mode !== filters.handlingMode) return false;
+			if (filters.createdFrom && ticket.created_at.slice(0, 10) < filters.createdFrom) return false;
+			if (filters.createdTo && ticket.created_at.slice(0, 10) > filters.createdTo) return false;
+			if (filters.customerId && ticket.customer_id !== filters.customerId) return false;
+			return true;
+		};
+		const items = [...this.#tickets.entries()].filter(matches)
+			.map(([, ticket]) => ticket)
 			.sort((left, right) => filters.sort === "oldest"
 				? left.created_at.localeCompare(right.created_at)
 				: filters.sort === "priority"
 					? priorityRank[right.priority] - priorityRank[left.priority] || right.created_at.localeCompare(left.created_at)
 					: right.created_at.localeCompare(left.created_at));
-		return { items: items.slice(offset, offset + limit), total: items.length };
+		return { items: items.slice(offset, offset + limit).map((ticket) => structuredClone(ticket)), total: items.length };
 	}
 }
 

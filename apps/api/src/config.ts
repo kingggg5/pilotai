@@ -63,6 +63,9 @@ const schema = z.object({
 	RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3_600).default(60),
 	REDIS_URL: optional,
 	WEBHOOK_SECRET: optional,
+	APPROVAL_TTL_MINUTES: z.coerce.number().int().min(1).max(1_440).default(30),
+	ESCALATION_WEBHOOK_URL: optional,
+	ESCALATION_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(3_000),
 
 	OTEL_ENABLED: boolean,
 	OTEL_SERVICE_NAME: z.string().default("servicepilot-api"),

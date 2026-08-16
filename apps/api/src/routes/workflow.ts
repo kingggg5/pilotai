@@ -1,10 +1,11 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { type ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
 import { AuditActions } from "../audit.js";
 import type { AppContainer } from "../container.js";
-import { ApprovalResumeRequest, AssistRequest, DecisionRequest } from "../domain.js";
+import { ApprovalResumeRequest, AssistRequest, AssistResponse, DecisionRequest } from "../domain.js";
 import { requireRole } from "../security.js";
 import { ticketStatus } from "./operations.js";
 import { routeContext } from "./context.js";
@@ -14,7 +15,7 @@ export async function registerWorkflowRoutes(app: FastifyInstance, container: Ap
 	const api = app.withTypeProvider<ZodTypeProvider>();
 	const { authenticate, principal } = routeContext(container);
 
-	api.post("/api/v1/assist", { preHandler: authenticate, schema: { tags: ["workflow"], body: AssistRequest, response: { 200: z.any(), 422: ErrorResponse } } }, async (request) => {
+	api.post("/api/v1/assist", { preHandler: authenticate, schema: { tags: ["workflow"], body: AssistRequest, response: { 200: AssistResponse, 422: ErrorResponse } } }, async (request) => {
 		const actor = principal(request);
 		const run = await container.workflow.start({ ...request.body, metadata: { ...request.body.metadata, tenant_id: actor.tenant_id, actor_id: actor.subject, roles: actor.roles } }, actor.tenant_id);
 		container.metrics.record(run.status);
@@ -28,8 +29,8 @@ export async function registerWorkflowRoutes(app: FastifyInstance, container: Ap
 		const run = await container.workflow.status(threadId, principal(request).tenant_id);
 		return run ?? reply.code(404).send({ detail: "Workflow run not found", code: "NOT_FOUND" });
 	};
-	api.get("/api/v1/runs/:threadId", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, response: { 200: z.any(), 404: ErrorResponse } } }, getRun);
-	api.get("/api/v1/assist/:threadId", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, response: { 200: z.any(), 404: ErrorResponse } } }, getRun);
+	api.get("/api/v1/runs/:threadId", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, response: { 200: AssistResponse, 404: ErrorResponse } } }, getRun);
+	api.get("/api/v1/assist/:threadId", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, response: { 200: AssistResponse, 404: ErrorResponse } } }, getRun);
 
 	const resume = async (request: FastifyRequest, reply: FastifyReply, supplied?: z.infer<typeof ApprovalResumeRequest>) => {
 		const actor = principal(request);
@@ -37,6 +38,7 @@ export async function registerWorkflowRoutes(app: FastifyInstance, container: Ap
 		const decision = supplied ?? request.body as z.infer<typeof ApprovalResumeRequest>;
 		requireRole(actor, ["approver", "supervisor"], "Approver role required");
 		try {
+			const existing = await container.workflow.status(threadId, actor.tenant_id);
 			const run = await container.workflow.resume(threadId, { ...decision, reviewer: actor.subject }, actor.tenant_id);
 			const ticket = await container.tickets.getByRun(threadId, actor.tenant_id);
 			if (ticket) await container.tickets.save({ ...ticket, status: ticketStatus(run) }, actor.tenant_id);
@@ -44,15 +46,31 @@ export async function registerWorkflowRoutes(app: FastifyInstance, container: Ap
 			await container.audit.fromRequest(request, actor, {
 				action: decision.decision === "approve" ? AuditActions.approvalApproved : AuditActions.approvalRejected,
 				resourceType: "workflow_run", resourceId: threadId,
-				metadata: { ticket_id: ticket?.id, status: run.status, note_present: Boolean(decision.feedback) },
+				metadata: { ticket_id: ticket?.id, status: run.status, note_present: Boolean(decision.feedback), approved_draft_fingerprint: existing ? createHash("sha256").update(existing.draft).digest("hex").slice(0, 16) : null },
 			});
 			return run;
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Workflow failed";
-			return reply.code(message.includes("not found") ? 404 : 409).send({ detail: message, code: message.includes("not found") ? "NOT_FOUND" : "CONFLICT" });
+			const expired = message.includes("Approval window expired");
+			const notFound = message.includes("not found");
+			return reply.code(notFound ? 404 : 409).send({ detail: message, code: expired ? "APPROVAL_EXPIRED" : notFound ? "NOT_FOUND" : "CONFLICT" });
 		}
 	};
-	api.post("/api/v1/assist/:threadId/resume", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, body: ApprovalResumeRequest, response: { 200: z.any(), 404: ErrorResponse, 409: ErrorResponse } } }, resume);
-	api.post("/api/v1/runs/:threadId/decision", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, body: DecisionRequest, response: { 200: z.any(), 404: ErrorResponse, 409: ErrorResponse } } },
+	api.post("/api/v1/assist/:threadId/resume", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, body: ApprovalResumeRequest, response: { 200: AssistResponse, 404: ErrorResponse, 409: ErrorResponse } } }, resume);
+	api.post("/api/v1/runs/:threadId/decision", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, body: DecisionRequest, response: { 200: AssistResponse, 404: ErrorResponse, 409: ErrorResponse } } },
 		async (request, reply) => resume(request, reply, { decision: request.body.decision, feedback: request.body.note }));
+
+	api.post("/api/v1/runs/:threadId/reauthorize", { preHandler: authenticate, schema: { tags: ["workflow"], params: ThreadParams, response: { 200: AssistResponse, 404: ErrorResponse, 409: ErrorResponse } } }, async (request, reply) => {
+		const actor = principal(request);
+		const { threadId } = request.params as z.infer<typeof ThreadParams>;
+		requireRole(actor, ["approver", "supervisor"], "Approver role required");
+		try {
+			const run = await container.workflow.reauthorize(threadId, actor.tenant_id);
+			await container.audit.fromRequest(request, actor, { action: AuditActions.approvalReauthorized, resourceType: "workflow_run", resourceId: threadId, metadata: { expires_at: (run.approval && "expires_at" in run.approval ? run.approval.expires_at : null) ?? null } });
+			return run;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Re-authorization failed";
+			return reply.code(message.includes("not found") ? 404 : 409).send({ detail: message, code: message.includes("not found") ? "NOT_FOUND" : "CONFLICT" });
+		}
+	});
 }

@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ActionToast, type Notice } from "@/components/action-toast";
+import { AdminKpiPanel } from "@/components/admin-kpi-panel";
 import { postJson } from "@/lib/browser-api";
 import { localizePriority, localizeStatus, type Copy } from "@/lib/i18n";
 import { queueDataUrl, queuePageUrl } from "@/lib/queue-filters";
-import type { ConsoleData, Decision, Language, Priority, QueueFilters, Run, Ticket, TicketStatus } from "@/lib/types";
+import type { ConsoleData, Decision, KpiAnalytics, Language, Priority, QueueFilters, Run, Ticket, TicketStatus } from "@/lib/types";
 
 const teams = ["Customer Support", "Sales & Orders", "Billing & Refunds", "Technical Support", "Trust & Safety"];
 const statuses: TicketStatus[] = ["new", "investigating", "needs_approval", "draft_ready", "resolved"];
@@ -17,7 +18,7 @@ const priorities: Priority[] = ["urgent", "high", "normal", "low"];
 type TicketUpdate = (ticket: Ticket) => void;
 type NoticeUpdate = (notice: Notice) => void;
 
-export function AdminWorkspace({ initialData, copy, language, filters }: { initialData: ConsoleData; copy: Copy; language: Language; filters: QueueFilters }) {
+export function AdminWorkspace({ initialData, kpi, copy, language, filters }: { initialData: ConsoleData; kpi?: KpiAnalytics | null; copy: Copy; language: Language; filters: QueueFilters }) {
 	const router = useRouter();
 	const [data, setData] = useState(initialData);
 	const [selectedId, setSelectedId] = useState(initialData.tickets[0]?.id || "");
@@ -28,6 +29,7 @@ export function AdminWorkspace({ initialData, copy, language, filters }: { initi
 	const [incoming, setIncoming] = useState<Ticket[]>([]);
 	const [refreshing, setRefreshing] = useState(false);
 	const [refreshError, setRefreshError] = useState(false);
+	const [feedbackSent, setFeedbackSent] = useState<Record<string, boolean>>({});
 	const seenIds = useRef(new Set(initialData.tickets.map((ticket) => ticket.id)));
 	const refreshInFlight = useRef(false);
 	const tickets = data.tickets;
@@ -103,6 +105,7 @@ export function AdminWorkspace({ initialData, copy, language, filters }: { initi
 
 	return (
 		<main className="admin-shell">
+			{kpi ? <AdminKpiPanel kpi={kpi} copy={copy} language={language} /> : null}
 			<AiPulse data={data} copy={copy} />
 			{incoming.length ? <IncomingChatBanner chats={incoming} copy={copy} onOpen={() => { setSelectedId(incoming[0].id); setIncoming([]); setNotice(null); }} /> : null}
 			<div className="queue-refresh-bar"><span className={refreshError ? "queue-refresh-error" : undefined} aria-live="polite">{refreshing ? copy.admin.refreshing : refreshError ? copy.admin.refreshFailed : `${copy.admin.refreshed} ${new Date(data.checkedAt).toLocaleTimeString(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit" })}`}</span><button type="button" onClick={() => void refreshQueue(true)} disabled={refreshing}>{refreshing ? "…" : copy.admin.refreshQueue}</button></div>
@@ -123,7 +126,7 @@ export function AdminWorkspace({ initialData, copy, language, filters }: { initi
 					<Pagination data={data} filters={filters} language={language} />
 				</aside>
 				<section className="ticket-pane">
-					{selected && run ? <TicketWorkspace ticket={selected} run={run} copy={copy} language={language} note={note} setNote={setNote} pending={pending} error={error} decide={decide} onTicket={(ticket) => setData((current) => ({ ...current, tickets: current.tickets.map((item) => item.id === ticket.id ? ticket : item) }))} onNotice={setNotice} /> : <p className="empty-copy">{copy.admin.empty}</p>}
+					{selected && run ? <TicketWorkspace ticket={selected} run={run} copy={copy} language={language} note={note} setNote={setNote} pending={pending} error={error} decide={decide} feedbackDone={Boolean(feedbackSent[selected.id])} onFeedbackSent={() => setFeedbackSent((current) => ({ ...current, [selected.id]: true }))} onTicket={(ticket) => setData((current) => ({ ...current, tickets: current.tickets.map((item) => item.id === ticket.id ? ticket : item) }))} onNotice={setNotice} /> : <p className="empty-copy">{copy.admin.empty}</p>}
 				</section>
 			</div>
 			<ActionToast notice={notice} onDismiss={() => setNotice(null)} dismissLabel={copy.commerce.dismiss} />
@@ -170,7 +173,7 @@ function Pagination({ data, filters, language }: { data: ConsoleData; filters: Q
 	return <nav className="queue-pagination" aria-label="Ticket pages">{current > 1 ? <Link href={queuePageUrl(language, filters, current - 1)}>←</Link> : <span />}<small>{data.offset + 1}–{Math.min(data.offset + data.tickets.length, data.total)} / {data.total}</small>{data.offset + data.limit < data.total ? <Link href={queuePageUrl(language, filters, current + 1)}>→</Link> : <span />}</nav>;
 }
 
-function TicketWorkspace({ ticket, run, copy, language, note, setNote, pending, error, decide, onTicket, onNotice }: { ticket: Ticket; run: Run; copy: Copy; language: Language; note: string; setNote: (value: string) => void; pending?: Decision; error: string; decide: (decision: Decision) => void; onTicket: TicketUpdate; onNotice: NoticeUpdate }) {
+function TicketWorkspace({ ticket, run, copy, language, note, setNote, pending, error, decide, feedbackDone, onFeedbackSent, onTicket, onNotice }: { ticket: Ticket; run: Run; copy: Copy; language: Language; note: string; setNote: (value: string) => void; pending?: Decision; error: string; decide: (decision: Decision) => void; feedbackDone: boolean; onFeedbackSent: () => void; onTicket: TicketUpdate; onNotice: NoticeUpdate }) {
 	return (
 		<>
 			<header className="ticket-header">
@@ -182,6 +185,7 @@ function TicketWorkspace({ ticket, run, copy, language, note, setNote, pending, 
 				<div className="work-column">
 					{ticket.channel === "chat" ? <AdminChatPreview ticket={ticket} run={run} copy={copy} onNotice={onNotice} /> : <section className="work-section request-section"><span className="section-label">{copy.admin.fullRequest}</span><h3>{copy.admin.subject}</h3><p>{ticket.summary}</p></section>}
 					{ticket.channel === "chat" ? null : <DraftCard run={run} copy={copy} onNotice={onNotice} />}
+					<DraftFeedback key={ticket.id} ticket={ticket} copy={copy} done={feedbackDone} onSent={onFeedbackSent} onNotice={onNotice} />
 					<EvidenceCard run={run} copy={copy} />
 				</div>
 				<aside className="decision-column">
@@ -267,6 +271,57 @@ function DraftCard({ run, copy, onNotice }: { run: Run; copy: Copy; onNotice: No
 	}
 
 	return <section className="work-section draft-section"><div className="section-heading"><h3>{copy.admin.draft}</h3>{run.draft ? <button type="button" onClick={copyDraft}>{copied ? copy.admin.copied : copy.admin.copyDraft}</button> : null}</div><blockquote>{run.draft || copy.admin.noEvidence}</blockquote></section>;
+}
+
+function DraftFeedback({ ticket, copy, done, onSent, onNotice }: { ticket: Ticket; copy: Copy; done: boolean; onSent: () => void; onNotice: NoticeUpdate }) {
+	const [choice, setChoice] = useState<"thumbs_up" | "thumbs_down">();
+	const [note, setNote] = useState("");
+	const [sending, setSending] = useState(false);
+
+	async function send(feedbackType: "thumbs_up" | "thumbs_down", notes?: string) {
+		setSending(true);
+		try {
+			const payload = await postJson<{ success: boolean }>("/api/admin/feedback", { ticketId: ticket.id, feedbackType, ...(notes ? { notes } : {}) });
+			if (!payload.success) throw new Error(copy.admin.feedback.failed);
+			setChoice(undefined);
+			setNote("");
+			onSent();
+			onNotice({ tone: "success", message: copy.admin.feedback.sent });
+		} catch (reason) {
+			onNotice({ tone: "error", message: reason instanceof Error ? reason.message : copy.admin.feedback.failed });
+		} finally {
+			setSending(false);
+		}
+	}
+
+	function submitNote(event: React.FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (sending) return;
+		void send("thumbs_down", note.trim() || undefined);
+	}
+
+	if (done) return <p className="draft-feedback-done" role="status">{copy.admin.feedback.sent}</p>;
+
+	return (
+		<section className="work-section draft-feedback" aria-label={copy.admin.feedback.title}>
+			<div className="section-heading"><h3>{copy.admin.feedback.title}</h3></div>
+			{choice === "thumbs_down" ? (
+				<form className="draft-feedback-form" onSubmit={submitNote}>
+					<label className="sr-only" htmlFor={`feedback-note-${ticket.id}`}>{copy.admin.feedback.noteLabel}</label>
+					<input id={`feedback-note-${ticket.id}`} maxLength={2_000} placeholder={copy.admin.feedback.notePlaceholder} value={note} onChange={(event) => setNote(event.target.value)} />
+					<div className="draft-feedback-actions">
+						<button type="button" disabled={sending} onClick={() => void send("thumbs_up")}>{copy.admin.feedback.helpful}</button>
+						<button className="primary-button" disabled={sending} type="submit">{sending ? copy.admin.feedback.sending : copy.admin.feedback.send}</button>
+					</div>
+				</form>
+			) : (
+				<div className="draft-feedback-actions">
+					<button type="button" aria-label={copy.admin.feedback.helpful} disabled={sending} onClick={() => void send("thumbs_up")}>👍 {copy.admin.feedback.helpful}</button>
+					<button type="button" aria-label={copy.admin.feedback.needsWork} disabled={sending} onClick={() => setChoice("thumbs_down")}>👎 {copy.admin.feedback.needsWork}</button>
+				</div>
+			)}
+		</section>
+	);
 }
 
 function EvidenceCard({ run, copy }: { run: Run; copy: Copy }) {

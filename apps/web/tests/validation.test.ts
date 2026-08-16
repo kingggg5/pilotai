@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { parseDecision, parseTicketDraft } from "../lib/validation.ts";
+import { parseDecision, parseTicketDraft, parseTicketFeedback } from "../lib/validation.ts";
 import { auditPageUrl, parseAuditFilters } from "../lib/audit-filters.ts";
 import { parseQueueFilters, queueDataUrl, queuePageUrl } from "../lib/queue-filters.ts";
 
@@ -20,6 +20,12 @@ assert.deepEqual(draft?.conversationContext, [{ role: "customer", content: "I pl
 
 assert.equal(parseTicketDraft({ message: "Help", customer: "A", customerId: "B" }), null);
 assert.equal(parseDecision({ runId: "run", decision: "approve", note: "x".repeat(2_001) }), null);
+
+assert.deepEqual(parseTicketFeedback({ ticketId: " tkt_1 ", feedbackType: "thumbs_down", notes: " wrong tone " }), { ticketId: "tkt_1", feedbackType: "thumbs_down", notes: "wrong tone" });
+assert.deepEqual(parseTicketFeedback({ ticketId: "tkt_1", feedbackType: "thumbs_up", rating: 5 }), { ticketId: "tkt_1", feedbackType: "thumbs_up", rating: 5 });
+assert.equal(parseTicketFeedback({ ticketId: "tkt_1", feedbackType: "escalated" }), null);
+assert.equal(parseTicketFeedback({ ticketId: "tkt_1", feedbackType: "thumbs_up", rating: 9 }), null);
+assert.equal(parseTicketFeedback({ ticketId: "tkt_1", feedbackType: "thumbs_up", notes: "x".repeat(2_001) }), null);
 
 const audit = parseAuditFilters({ action: "ticket.created", outcome: "success", resource: " ORD- " });
 assert.deepEqual(audit.filters, { action: "ticket.created", outcome: "success", resourceId: "ORD-" });

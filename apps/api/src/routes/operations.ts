@@ -168,38 +168,35 @@ export async function registerOperationsRoutes(app: FastifyInstance, container: 
 		const actor = principal(request);
 		requireRole(actor, ["agent", "supervisor"], "Agent role required");
 		const { items, total } = await container.tickets.listPage(actor.tenant_id, 1000, 0);
-		const resolved = items.filter((t) => t.status === "resolved").length;
-		const autoCompleted = items.filter((t) => t.requested_action?.includes("Completed automatically") || t.tags.includes("auto-resolved")).length;
+		const counts = items.reduce((acc, ticket) => {
+			if (ticket.status === "resolved") acc.resolved += 1;
+			if (ticket.requested_action?.includes("Completed automatically") || ticket.tags.includes("auto-resolved")) acc.autoCompleted += 1;
+			acc.confidence += ticket.confidence;
+			if (ticket.priority === "urgent" || ticket.priority === "high") acc.urgent += 1;
+			else if (ticket.priority === "normal") acc.neutral += 1;
+			else acc.positive += 1;
+			// positive = low priority OR resolved; a resolved low-priority ticket counts once.
+			if (ticket.status === "resolved" && ticket.priority !== "low") acc.positive += 1;
+			return acc;
+		}, { resolved: 0, autoCompleted: 0, confidence: 0, urgent: 0, neutral: 0, positive: 0 });
 		const totalCount = Math.max(1, total);
-		const zeroTouchRate = Number(((autoCompleted / totalCount) * 100).toFixed(1));
-		const humanAssistedRate = Number((((resolved - autoCompleted) / totalCount) * 100).toFixed(1));
-		const avgConfidence = items.length ? Number((items.reduce((acc, t) => acc + t.confidence, 0) / items.length).toFixed(2)) : 0.95;
-		const hoursSaved = Number(((autoCompleted * 10) / 60).toFixed(1));
-		const costSavedThb = Math.round(hoursSaved * 250);
+		const hoursSaved = Number(((counts.autoCompleted * 10) / 60).toFixed(1));
 
-		const urgentCount = items.filter((t) => t.priority === "urgent" || t.priority === "high").length;
-		const neutralCount = items.filter((t) => t.priority === "normal").length;
-		const positiveCount = items.filter((t) => t.priority === "low" || t.status === "resolved").length;
-
-		await container.audit.fromRequest(request, actor, {
-			action: AuditActions.kpiRequested,
-			resourceType: "analytics",
-			resourceId: "kpi",
-		});
+		await container.audit.fromRequest(request, actor, { action: AuditActions.kpiRequested, resourceType: "analytics", resourceId: "kpi" });
 
 		return {
 			total_tickets: total,
-			resolved_tickets: resolved,
-			zero_touch_rate: zeroTouchRate,
-			human_assisted_rate: Math.max(0, humanAssistedRate),
-			avg_confidence: avgConfidence,
+			resolved_tickets: counts.resolved,
+			zero_touch_rate: Number(((counts.autoCompleted / totalCount) * 100).toFixed(1)),
+			human_assisted_rate: Math.max(0, Number((((counts.resolved - counts.autoCompleted) / totalCount) * 100).toFixed(1))),
+			avg_confidence: items.length ? Number((counts.confidence / items.length).toFixed(2)) : 0.95,
 			estimated_hours_saved: hoursSaved,
-			estimated_cost_saved_thb: costSavedThb,
+			estimated_cost_saved_thb: Math.round(hoursSaved * 250),
 			csat_score: 4.8,
 			sentiment_distribution: {
-				positive: positiveCount,
-				neutral: neutralCount,
-				urgent_dispute: urgentCount,
+				positive: counts.positive,
+				neutral: counts.neutral,
+				urgent_dispute: counts.urgent,
 			},
 		};
 	});

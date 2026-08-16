@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { TicketClassifier } from "../apps/api/src/classifier.js";
+
+import { buildGoldenWorkflow } from "../apps/api/src/golden-fixture.js";
+import type { AssistResponse } from "../apps/api/src/domain.js";
 import { jsonLines, option, output, root } from "./io.js";
 
 type Expected = { category: string; priority: string; route: string; requires_human_approval: boolean; allowed_tools: string[] };
@@ -23,27 +25,51 @@ function validate() {
 validate();
 if (process.argv.includes("--validate-only")) await output({ valid: true, case_count: cases.length });
 else {
-	const classifier = new TicketClassifier();
-	const predictions = cases.map((row) => {
-		const result = classifier.predict(row.input.message);
-		const refuse = result.category === "security";
-		const approval = result.category === "refund_request" || result.priority === "urgent" || (result.category === "billing" && result.priority === "high") || (result.category === "account_access" && ["high", "urgent"].includes(result.priority));
-		const allowed_tools = refuse ? [] : result.category === "order_status" ? ["get_order_status"] : result.category === "refund_status" ? ["check_refund_status"] : result.category === "policy" ? ["search_policy"] : approval ? ["create_escalation"] : [];
-		const route = refuse ? "refuse" : approval ? "human" : result.category === "general" && /still does not work|ยัง.*ไม่ได้/iu.test(row.input.message) ? "clarify" : result.category === "technical" ? "human" : "automated";
-		return { category: result.category, priority: result.priority, route, requires_human_approval: approval, allowed_tools };
+	// Golden cases run through the real workflow graph over a deterministic
+	// fixture world (local model, memory repositories) — no policy re-implementation.
+	const tenant = cases[0]?.input.tenant_id ?? "tenant-golden";
+	const corpus = await jsonLines<{ id: string; source: string; title: string; content: string; page_number?: number; page_label?: string; locale: "th" | "en" | "multi" }>(resolve(root, "evals/golden/rag_documents.v1.jsonl"));
+	const workflow = await buildGoldenWorkflow({
+		tenantId: tenant,
+		orders: [{ id: "SO-1042", status: "shipped" }, { id: "SO-8821", status: "shipped" }, { id: "SO-7011", status: "confirmed" }, { id: "SO-9120", status: "confirmed" }],
+		refunds: ["RF-3308", "RF-4410"],
+		documents: corpus.map((document) => ({ id: document.id, source: document.source, title: document.title, content: document.content, page_number: document.page_number ?? null, page_label: document.page_label ?? null, locale: document.locale })),
 	});
+
+	// Cases run sequentially through the real graph to keep the report deterministic.
+	const runs: AssistResponse[] = [];
+	for (const row of cases) runs.push(await workflow.start({ message: row.input.message, locale: row.input.locale as "en" | "th", metadata: { tenant_id: row.input.tenant_id } }, row.input.tenant_id));
+
+	const routeOf = (run: AssistResponse) => {
+		if (run.status === "refused") return "refuse";
+		if (run.automation.mode === "needs_customer") return "clarify";
+		if (run.automation.mode === "needs_approval" || run.policy.requires_approval) return "human";
+		if (run.automation.mode === "auto_completed") return "automated";
+		if (run.automation.mode === "auto_routed") return run.classification.category === "general" ? "clarify" : "human";
+		return "human";
+	};
+	const toolsOf = (run: AssistResponse) => {
+		if (run.status === "refused") return [];
+		if (run.policy.requires_approval) return ["create_escalation"];
+		const tool = run.retrieval.documents[0]?.metadata?.tool;
+		if (typeof tool === "string") return [tool];
+		if (run.classification.category === "policy") return ["search_policy"];
+		return [];
+	};
+	const results = runs.map((run) => ({ category: run.classification.category, priority: run.classification.priority, route: routeOf(run), requires_human_approval: run.policy.requires_approval, allowed_tools: toolsOf(run) }));
+
 	const metrics: Record<string, number> = {};
 	const mapping = { category: "category_accuracy", priority: "priority_accuracy", route: "route_accuracy", requires_human_approval: "approval_accuracy", allowed_tools: "tool_policy_accuracy" } as const;
 	const failures: Array<{ id: string; field: string }> = [];
 	for (const [field, metric] of Object.entries(mapping)) {
-		const correct = cases.filter((row, index) => JSON.stringify(row.expected[field as keyof Expected]) === JSON.stringify(predictions[index]![field as keyof Expected])).length;
+		const correct = cases.filter((row, index) => JSON.stringify(row.expected[field as keyof Expected]) === JSON.stringify(results[index]![field as keyof Expected])).length;
 		metrics[metric] = correct / cases.length;
-		cases.forEach((row, index) => { if (JSON.stringify(row.expected[field as keyof Expected]) !== JSON.stringify(predictions[index]![field as keyof Expected])) failures.push({ id: row.id, field }); });
+		cases.forEach((row, index) => { if (JSON.stringify(row.expected[field as keyof Expected]) !== JSON.stringify(results[index]![field as keyof Expected])) failures.push({ id: row.id, field }); });
 	}
 	const critical = cases.filter((row) => row.tags.some((tag) => spec.critical_tags.includes(tag)));
 	metrics.critical_case_pass_rate = critical.filter((row) => !failures.some((failure) => failure.id === row.id)).length / critical.length;
 	const failed_thresholds = Object.fromEntries(Object.entries(spec.thresholds).filter(([name, minimum]) => name in metrics && metrics[name]! < minimum).map(([name, minimum]) => [name, { actual: metrics[name], minimum }]));
-	const report = { schema_version: 1, case_count: cases.length, critical_case_count: critical.length, metrics, passed: !Object.keys(failed_thresholds).length, failed_thresholds, failures };
+	const report = { schema_version: 2, runner: "real-workflow", persistence: "memory", case_count: cases.length, critical_case_count: critical.length, metrics, passed: !Object.keys(failed_thresholds).length, failed_thresholds, failures };
 	await output(report, option("--report"));
 	if (!report.passed) process.exitCode = 1;
 }
